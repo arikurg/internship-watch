@@ -1,0 +1,49 @@
+name: Watch internships
+
+on:
+  schedule:
+    # Simplify pushes a fresh feed at about :02 and :32 past each hour.
+    # Checking at :07 and :37 catches each update; :22 and :52 cover runs
+    # that GitHub starts late. Times are UTC, which doesn't matter here.
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+    inputs:
+      test_email:
+        description: "Send a test email listing every matching open role (saves nothing)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: internship-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check feed and email new postings
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          TEST_EMAIL: ${{ inputs.test_email && '1' || '' }}
+        run: python3 watch.py
+
+      - name: Save seen postings
+        run: |
+          if [ -n "$(git status --porcelain state)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state
+            git commit -m "Record seen postings"
+            git pull --rebase --quiet
+            git push
+          fi
