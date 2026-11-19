@@ -1,40 +1,87 @@
 {
   "feed_url": "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json",
-  "companies": [
-    "Tesla"
-  ],
-  "always_include_categories": [
-    "Software",
-    "Software Engineering"
-  ],
-  "title_keywords": [
-    "software",
-    "firmware",
-    "embedded",
-    "developer",
-    "fullstack",
-    "full stack",
-    "full-stack",
-    "backend",
-    "back end",
-    "frontend",
-    "front end",
-    "infrastructure",
-    "compiler",
-    "distributed systems",
-    "machine learning",
-    "reinforcement learning",
-    "ml engineer",
-    "rl engineer",
-    "data engineer",
-    "simulation",
-    "test automation",
-    "autonomy",
-    "tooling",
-    "devops",
-    "site reliability"
+  "watches": [
+    {
+      "name": "Tesla software",
+      "companies": [
+        "Tesla"
+      ],
+      "categories": [
+        "Software",
+        "Software Engineering"
+      ],
+      "title_keywords": [
+        "software",
+        "firmware",
+        "embedded",
+        "developer",
+        "fullstack",
+        "full stack",
+        "full-stack",
+        "backend",
+        "back end",
+        "frontend",
+        "front end",
+        "infrastructure",
+        "compiler",
+        "distributed systems",
+        "machine learning",
+        "reinforcement learning",
+        "ml engineer",
+        "rl engineer",
+        "data engineer",
+        "simulation",
+        "test automation",
+        "autonomy",
+        "tooling",
+        "devops",
+        "site reliability"
+      ]
+    },
+    {
+      "name": "AMD & NVIDIA: software + hardware verification",
+      "companies": [
+        "AMD",
+        "NVIDIA"
+      ],
+      "categories": [
+        "Software",
+        "Software Engineering",
+        "AI/ML/Data"
+      ],
+      "title_keywords": [
+        "verification"
+      ]
+    },
+    {
+      "name": "Embedded & firmware (any company)",
+      "companies": "any",
+      "categories": [],
+      "title_keywords": [
+        "embedded",
+        "firmware",
+        "rtos",
+        "microcontroller",
+        "microcontrollers",
+        "bare metal",
+        "bare-metal",
+        "board support",
+        "avionics software",
+        "flight software"
+      ]
+    }
   ],
   "title_exclude": [],
+  "degrees_any": [
+    "Bachelor's",
+    "Master's"
+  ],
+  "skip_terms": [
+    "Spring 2026",
+    "Summer 2026",
+    "Fall 2026",
+    "Winter 2026"
+  ],
   "timezone": "America/New_York",
   "notify_on_first_run": true
 }

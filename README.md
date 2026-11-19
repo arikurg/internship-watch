@@ -1,8 +1,12 @@
 # internship-watch
 
-A GitHub Action that emails you when a new Tesla software internship shows up.
+A GitHub Action that emails you when a new internship matches one of your watches:
 
-It reads the [SimplifyJobs internship feed](https://github.com/SimplifyJobs/Summer2027-Internships), which Simplify refreshes about every 30 minutes and which covers summer and off-season terms. The workflow checks four times an hour, compares open Tesla roles against `state/seen.json`, and emails you anything it hasn't seen. Tesla's careers site blocks most automated traffic, so the watcher doesn't touch it.
+- **Tesla software**: software, firmware, ML and infrastructure roles at Tesla
+- **AMD & NVIDIA**: software and AI/ML roles, plus hardware roles only when they're verification
+- **Embedded & firmware**: embedded, firmware, RTOS and flight software roles at any company, summer and off-season
+
+It reads the [SimplifyJobs internship feed](https://github.com/SimplifyJobs/Summer2027-Internships), which Simplify refreshes about every 30 minutes and which covers summer and off-season terms. The workflow checks four times an hour, compares matching open roles against `state/seen.json`, and emails you anything it hasn't seen. Tesla's careers site blocks most automated traffic, so the watcher doesn't touch it.
 
 ## Setup (about 10 minutes)
 
@@ -29,15 +33,24 @@ After that the schedule takes over. To check your email setup again, run the wor
 
 ## Changing what it watches
 
-Edit `config.json`:
+Edit `config.json`. Each entry in `watches` is one rule, and a role that matches any watch gets emailed (once, even if it matches several). Emails group roles under the watch that caught them.
 
-- `companies`: add names exactly as Simplify spells them, e.g. `["Tesla", "SpaceX", "NVIDIA"]`.
-- `always_include_categories`: Simplify categories that always count. The default takes everything Simplify files under Software.
-- `title_keywords`: words that pull in roles from other categories. Simplify files many Tesla SWE roles (firmware, embedded, vehicle software) under Hardware, so the keyword list catches those.
+Inside a watch:
+
+- `name`: the section heading in your emails.
+- `companies`: names exactly as Simplify spells them, e.g. `["SpaceX", "Anduril"]`, or `"any"` for every company.
+- `categories`: Simplify categories that always count (`Software`, `Software Engineering`, `Hardware`, `AI/ML/Data`, `Product`, `Quant`, ...).
+- `title_keywords`: words that pull in a role from any category. They match whole words, case-insensitive. Simplify files many software roles (firmware, embedded, vehicle software) under Hardware, so keywords catch what categories miss.
+- `title_exclude` and `degrees_any` (optional): override the top-level values for this watch only.
+
+Top-level settings apply to every watch:
+
 - `title_exclude`: words that drop a role even if it matched, e.g. `["analyst"]`.
+- `degrees_any`: a role passes if it accepts at least one of these degrees. The default `["Bachelor's", "Master's"]` drops PhD-only and MBA roles. Roles that list no degree always pass.
+- `skip_terms`: drop a role when every term it lists is here. The default skips 2026 terms that have already started, which Simplify sometimes leaves marked open. Roles with no term listed always pass.
 - `feed_url`: when Simplify starts its Summer 2028 repo, point this at the new repo's `.github/scripts/listings.json`.
 
-Broadening the filter makes older open roles count as new, so expect one bigger email after the change.
+Broadening a filter makes older open roles count as new, so expect one bigger email after the change. Two easy additions if you want them: `"validation"` in the AMD & NVIDIA keywords for post-silicon validation roles, and `"fpga"` in the embedded watch for FPGA roles.
 
 Preview what your filter matches without sending anything:
 
@@ -47,7 +60,7 @@ python3 watch.py --dry-run --test-email
 
 ## How fast are the alerts?
 
-Simplify publishes at about :02 and :32 past each hour, and the workflow checks at :07, :22, :37 and :52. GitHub sometimes starts scheduled runs late, so expect an email within about 20 minutes of Simplify listing a role. How long Simplify takes to pick up a Tesla posting is outside your control.
+Simplify publishes at about :02 and :32 past each hour, and the workflow checks at :07, :22, :37 and :52. GitHub sometimes starts scheduled runs late, so expect an email within about 20 minutes of Simplify listing a role. How long Simplify takes to pick up a posting is outside your control.
 
 ## When something breaks
 

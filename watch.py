@@ -88,17 +88,29 @@ def word_regex(words: list[str]) -> re.Pattern | None:
     return re.compile(rf"\b(?:{alternatives})\b", re.IGNORECASE)
 
 
-class Matcher:
-    def __init__(self, config: dict):
-        self.companies = {c.lower() for c in config["companies"]}
-        self.categories = {c.lower() for c in config.get("always_include_categories", [])}
-        self.include = word_regex(config.get("title_keywords", []))
-        self.exclude = word_regex(config.get("title_exclude", []))
+class Watch:
+    """One entry from config["watches"].
 
-    def __call__(self, listing: dict) -> bool:
-        if listing.get("company_name", "").lower() not in self.companies:
+    A listing matches when its company is in scope and either its Simplify
+    category is in `categories` or its title contains one of `title_keywords`.
+    `title_exclude` and `degrees_any` fall back to the top-level config values.
+    """
+
+    def __init__(self, spec: dict, config: dict):
+        self.name = spec["name"]
+        companies = spec.get("companies", "any")
+        self.companies = None if companies in ("any", "*", None) else {c.lower() for c in companies}
+        self.categories = {c.lower() for c in spec.get("categories", [])}
+        self.include = word_regex(spec.get("title_keywords", []))
+        self.exclude = word_regex(spec.get("title_exclude", config.get("title_exclude", [])))
+        self.degrees = {d.lower() for d in spec.get("degrees_any", config.get("degrees_any", []))}
+
+    def matches(self, listing: dict) -> bool:
+        if self.companies is not None and listing.get("company_name", "").lower() not in self.companies:
             return False
-        if not listing.get("active") or not listing.get("is_visible", True):
+        # Postings with no degree info pass; otherwise one listed degree must be yours.
+        degrees = {d.lower() for d in listing.get("degrees") or []}
+        if self.degrees and degrees and not degrees & self.degrees:
             return False
         title = listing.get("title", "")
         if self.exclude and self.exclude.search(title):
@@ -106,6 +118,26 @@ class Matcher:
         if listing.get("category", "").lower() in self.categories:
             return True
         return bool(self.include and self.include.search(title))
+
+
+class Matcher:
+    """Returns the name of the first watch a listing matches, or None."""
+
+    def __init__(self, config: dict):
+        self.watches = [Watch(spec, config) for spec in config["watches"]]
+        self.skip_terms = {t.lower() for t in config.get("skip_terms", [])}
+
+    def __call__(self, listing: dict) -> str | None:
+        if not listing.get("active") or not listing.get("is_visible", True):
+            return None
+        # Skip roles whose every listed term has already started or passed.
+        terms = {t.lower() for t in listing.get("terms") or []}
+        if self.skip_terms and terms and terms <= self.skip_terms:
+            return None
+        for watch in self.watches:
+            if watch.matches(listing):
+                return watch.name
+        return None
 
 
 # --------------------------------------------------------------------------- #
@@ -158,60 +190,84 @@ def posting_fields(p: dict, tz, now: datetime) -> dict:
         "terms": ", ".join(p.get("terms") or []) or "Term not listed",
         "posted": f"{stamp} ({describe_age(posted, now)})",
         "category": p.get("category", ""),
+        "watch": p.get("_watch", ""),
     }
+
+
+def company_label(companies: list[str], limit: int = 3) -> str:
+    if len(companies) <= limit:
+        return ", ".join(companies)
+    return f"{', '.join(companies[:limit])} +{len(companies) - limit} more"
 
 
 def build_email(postings: list[dict], config: dict, heading: str) -> tuple[str, str, str]:
     tz = local_tz(config)
     now = datetime.now(timezone.utc)
     rows = [posting_fields(p, tz, now) for p in postings]
-    companies = sorted({r["company"] for r in rows}) or config["companies"]
-    company_label = ", ".join(companies)
+
+    # Most frequent companies first, so the subject names the bulk of the batch.
+    counts: dict[str, int] = {}
+    for r in rows:
+        counts[r["company"]] = counts.get(r["company"], 0) + 1
+    companies = sorted(counts, key=lambda c: (-counts[c], c))
 
     if heading == "new" and len(rows) == 1:
-        subject = f"New {company_label} internship: {rows[0]['title']}"
+        subject = f"New {rows[0]['company']} internship: {rows[0]['title']}"
+    elif heading == "new" and len(companies) == 1:
+        subject = f"{len(rows)} new {companies[0]} internships"
     elif heading == "new":
-        subject = f"{len(rows)} new {company_label} internships"
+        subject = f"{len(rows)} new internships ({company_label(companies)})"
     elif heading == "live":
-        subject = f"Internship watcher is live: {len(rows)} open {company_label} roles"
+        subject = f"Internship watcher is live: {len(rows)} open roles"
     else:
-        subject = f"[test] {len(rows)} open {company_label} roles match your filter"
+        subject = f"[test] {len(rows)} open roles match your filters"
 
     intro = {
-        "new": "Simplify just picked up these postings:",
+        "new": "New postings that match your filters:",
         "live": "Your watcher is running. These matching roles are open right now, "
                 "and you'll get an email when a new one appears.",
         "test": "Test email. These matching roles are open right now:",
     }[heading]
     if not rows:
-        intro += "\n\n(No open roles match your filter at the moment.)"
+        intro += "\n\n(No open roles match your filters at the moment.)"
+
+    # Group by watch, in the order the watches appear in config.json.
+    order = [w["name"] for w in config["watches"]]
+    groups: dict[str, list[dict]] = {}
+    for r in rows:
+        groups.setdefault(r["watch"], []).append(r)
+    sections = sorted(groups.items(), key=lambda kv: order.index(kv[0]) if kv[0] in order else len(order))
 
     text_lines = [intro, ""]
-    for r in rows:
-        text_lines += [
-            r["title"],
-            f"  {r['locations']} | {r['terms']}",
-            f"  Posted {r['posted']} | {r['category']}",
-            f"  Apply: {r['url']}",
-            "",
-        ]
+    html_parts = []
+    for name, group in sections:
+        text_lines += [f"== {name} ({len(group)}) ==", ""]
+        html_parts.append(
+            f'<tr><td style="padding:20px 0 4px;font-size:13px;font-weight:700;letter-spacing:.04em;'
+            f'text-transform:uppercase;color:#555">{escape(name)} ({len(group)})</td></tr>'
+        )
+        for r in group:
+            text_lines += [
+                r["title"],
+                f"  {r['company']} | {r['locations']} | {r['terms']}",
+                f"  Posted {r['posted']} | {r['category']}",
+                f"  Apply: {r['url']}",
+                "",
+            ]
+            html_parts.append(f"""
+        <tr><td style="padding:12px 0;border-bottom:1px solid #e5e5e5">
+          <a href="{escape(r['url'])}" style="font-size:16px;font-weight:600;color:#1a56db;text-decoration:none">{escape(r['title'])}</a>
+          <div style="color:#333;margin-top:4px"><b>{escape(r['company'])}</b> &middot; {escape(r['locations'])} &middot; {escape(r['terms'])}</div>
+          <div style="color:#777;font-size:13px;margin-top:2px">Posted {escape(r['posted'])} &middot; {escape(r['category'])}</div>
+        </td></tr>""")
     text_lines.append("Source: SimplifyJobs internship feed")
     text = "\n".join(text_lines)
 
-    items = "".join(
-        f"""
-        <tr><td style="padding:12px 0;border-bottom:1px solid #e5e5e5">
-          <a href="{escape(r['url'])}" style="font-size:16px;font-weight:600;color:#1a56db;text-decoration:none">{escape(r['title'])}</a>
-          <div style="color:#333;margin-top:4px">{escape(r['locations'])} &middot; {escape(r['terms'])}</div>
-          <div style="color:#777;font-size:13px;margin-top:2px">Posted {escape(r['posted'])} &middot; {escape(r['category'])}</div>
-        </td></tr>"""
-        for r in rows
-    )
     intro_html = escape(intro).replace("\n", "<br>")
     html = f"""<!doctype html>
 <html><body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:620px;margin:0 auto;padding:16px;color:#111">
   <p style="margin:0 0 8px">{intro_html}</p>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">{items}</table>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">{''.join(html_parts)}</table>
   <p style="color:#999;font-size:12px;margin-top:16px">Source: SimplifyJobs internship feed</p>
 </body></html>"""
     return subject, text, html
@@ -271,13 +327,17 @@ def main() -> int:
 
     config = json.loads(CONFIG_PATH.read_text())
     listings = load_listings(args, config)
-    matches = Matcher(config)
-    open_roles = sorted(
-        (l for l in listings if matches(l)),
-        key=lambda l: l.get("date_posted", 0),
-        reverse=True,
-    )
+    matcher = Matcher(config)
+    open_roles = []
+    for listing in listings:
+        watch_name = matcher(listing)
+        if watch_name:
+            listing["_watch"] = watch_name
+            open_roles.append(listing)
+    open_roles.sort(key=lambda l: l.get("date_posted", 0), reverse=True)
     print(f"feed has {len(listings)} listings; {len(open_roles)} open roles match")
+    for watch in matcher.watches:
+        print(f"  {watch.name}: {sum(1 for l in open_roles if l['_watch'] == watch.name)}")
 
     if args.test_email:
         deliver(open_roles, config, "test", args.dry_run)
