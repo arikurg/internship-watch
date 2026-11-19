@@ -42,7 +42,8 @@
       "name": "AMD & NVIDIA: software + hardware verification",
       "companies": [
         "AMD",
-        "NVIDIA"
+        "NVIDIA",
+	"Marvell"
       ],
       "categories": [
         "Software",
