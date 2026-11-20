@@ -43,7 +43,7 @@
       "companies": [
         "AMD",
         "NVIDIA",
-	"Marvell"
+        "Marvell"
       ],
       "categories": [
         "Software",
@@ -52,6 +52,29 @@
       ],
       "title_keywords": [
         "verification"
+      ]
+    },
+    {
+      "name": "Amazon & Meta software",
+      "companies": [
+        "Amazon",
+        "Meta"
+      ],
+      "categories": [
+        "Software",
+        "Software Engineering"
+      ],
+      "title_keywords": [
+        "software",
+        "developer",
+        "sde"
+      ],
+      "title_exclude": [
+        "phd",
+        "ph.d",
+        "research scientist",
+        "research intern",
+        "apprentice"
       ]
     },
     {
@@ -72,11 +95,15 @@
       ]
     }
   ],
-  "title_exclude": [],
+  "title_exclude": [
+    "phd",
+    "ph.d"
+  ],
   "degrees_any": [
     "Bachelor's",
     "Master's"
   ],
+  "us_only": true,
   "skip_terms": [
     "Spring 2026",
     "Summer 2026",

@@ -88,12 +88,43 @@ def word_regex(words: list[str]) -> re.Pattern | None:
     return re.compile(rf"\b(?:{alternatives})\b", re.IGNORECASE)
 
 
+US_STATE_CODES = set(
+    "AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ "
+    "NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC PR".split()
+)
+US_STATE_NAMES = {
+    "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut", "delaware",
+    "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa", "kansas", "kentucky",
+    "louisiana", "maine", "maryland", "massachusetts", "michigan", "minnesota", "mississippi",
+    "missouri", "montana", "nebraska", "nevada", "new hampshire", "new jersey", "new mexico",
+    "new york", "north carolina", "north dakota", "ohio", "oklahoma", "oregon", "pennsylvania",
+    "rhode island", "south carolina", "south dakota", "tennessee", "texas", "utah", "vermont",
+    "virginia", "washington", "west virginia", "wisconsin", "wyoming", "district of columbia",
+    "puerto rico",
+}
+# Simplify's shorthand for big US metros. Bare "Remote" counts as US too.
+US_SHORTHANDS = {"nyc", "sf", "la", "south sf", "bay area", "silicon valley", "washington dc", "remote"}
+US_WORDS = re.compile(r"\b(?:united states|usa|u\.s\.a?|us)\b", re.IGNORECASE)
+
+
+def is_us_location(location: str) -> bool:
+    """True for Simplify location strings like "Seattle, WA", "NYC", "Texas" or "Remote in USA"."""
+    text = location.strip()
+    lower = text.lower()
+    if US_WORDS.search(text) or lower in US_SHORTHANDS or lower in US_STATE_NAMES:
+        return True
+    parts = [p.strip() for p in text.split(",")]
+    last = parts[-1]
+    return (len(parts) >= 2 and last.upper() in US_STATE_CODES) or last.lower() in US_STATE_NAMES
+
+
 class Watch:
     """One entry from config["watches"].
 
     A listing matches when its company is in scope and either its Simplify
     category is in `categories` or its title contains one of `title_keywords`.
-    `title_exclude` and `degrees_any` fall back to the top-level config values.
+    `title_exclude`, `degrees_any` and `us_only` fall back to the top-level
+    config values.
     """
 
     def __init__(self, spec: dict, config: dict):
@@ -104,9 +135,14 @@ class Watch:
         self.include = word_regex(spec.get("title_keywords", []))
         self.exclude = word_regex(spec.get("title_exclude", config.get("title_exclude", [])))
         self.degrees = {d.lower() for d in spec.get("degrees_any", config.get("degrees_any", []))}
+        self.us_only = bool(spec.get("us_only", config.get("us_only", False)))
 
     def matches(self, listing: dict) -> bool:
         if self.companies is not None and listing.get("company_name", "").lower() not in self.companies:
+            return False
+        # A role passes if any of its locations is in the US (or it lists none).
+        locations = listing.get("locations") or []
+        if self.us_only and locations and not any(is_us_location(l) for l in locations):
             return False
         # Postings with no degree info pass; otherwise one listed degree must be yours.
         degrees = {d.lower() for d in listing.get("degrees") or []}

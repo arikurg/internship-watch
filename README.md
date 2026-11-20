@@ -47,6 +47,7 @@ Top-level settings apply to every watch:
 
 - `title_exclude`: words that drop a role even if it matched, e.g. `["analyst"]`.
 - `degrees_any`: a role passes if it accepts at least one of these degrees. The default `["Bachelor's", "Master's"]` drops PhD-only and MBA roles. Roles that list no degree always pass.
+- `us_only`: when `true`, drop roles whose locations are all outside the US. A role that lists any US site (or "Remote") still passes. A watch can set its own `us_only` to override this.
 - `skip_terms`: drop a role when every term it lists is here. The default skips 2026 terms that have already started, which Simplify sometimes leaves marked open. Roles with no term listed always pass.
 - `feed_url`: when Simplify starts its Summer 2028 repo, point this at the new repo's `.github/scripts/listings.json`.
 
