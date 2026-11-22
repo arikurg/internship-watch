@@ -1,5 +1,10 @@
 {
   "feed_url": "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json",
+  "direct_sources": {
+    "tesla": {
+      "enabled": true
+    }
+  },
   "watches": [
     {
       "name": "Tesla software",
@@ -35,7 +40,9 @@
         "autonomy",
         "tooling",
         "devops",
-        "site reliability"
+        "site reliability",
+        "controls engineer",
+        "network engineer"
       ]
     },
     {

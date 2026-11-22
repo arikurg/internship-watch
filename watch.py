@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Email me when Simplify's internship feed lists a new posting that matches config.json.
+"""Email me when a new internship that matches config.json shows up.
 
-Runs on a schedule in GitHub Actions. Standard library only, so the workflow
-needs no pip install step.
+Reads Simplify's internship feed, plus companies' own job sites listed under
+direct_sources in config.json (Tesla for now), so roles Simplify hasn't picked
+up still reach you. Runs on a schedule in GitHub Actions. Standard library
+only, so the workflow needs no pip install step.
 
 Usage:
   python3 watch.py                 normal run: email new matches, update state
   python3 watch.py --dry-run       print the email instead of sending; state untouched
   python3 watch.py --test-email    email every matching open role; state untouched
-  python3 watch.py --feed-file F   read listings from a local file (for testing)
+  python3 watch.py --feed-file F   read Simplify listings from a local file (for testing)
+  python3 watch.py --tesla-file F  read Tesla's feed from a local file (for testing)
 
 Email settings come from environment variables:
   SMTP_USER, SMTP_PASSWORD   login (for Gmail: your address and an app password)
@@ -21,16 +24,21 @@ Email settings come from environment variables:
 from __future__ import annotations
 
 import argparse
+import bisect
+import copy
 import json
 import os
 import re
 import smtplib
 import ssl
+import statistics
 import sys
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
 from html import escape
 from pathlib import Path
 
@@ -75,6 +83,197 @@ def load_listings(args, config) -> list[dict]:
     if args.feed_file:
         return json.loads(Path(args.feed_file).read_text())
     return fetch_listings(config["feed_url"])
+
+
+# --------------------------------------------------------------------------- #
+# Direct source: Tesla's careers site
+# --------------------------------------------------------------------------- #
+
+TESLA_FEED_URL = "https://www.tesla.com/cua-api/apps/careers/state"
+TESLA_JOB_URL = "https://www.tesla.com/careers/search/job/{id}"
+TESLA_JOB_ID = re.compile(r"tesla\.com/careers/search/job/(?:[^/?#]*-)?(\d{5,7})(?:[/?#]|$)")
+# Tesla's site turns away requests that don't look like a browser.
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.tesla.com/careers/search/",
+}
+# Tesla files roles under departments, not Simplify-style categories.
+TESLA_CATEGORY = {"Vehicle Software": "Software"}
+# If a direct source keeps failing for this long, send one email about it.
+SOURCE_ALERT_AFTER = timedelta(hours=1)
+
+
+class SourceError(Exception):
+    pass
+
+
+def tesla_job_id(url: str) -> str | None:
+    """Job ID from a Tesla job link (both /job/289478 and /job/some-title-289478)."""
+    match = TESLA_JOB_ID.search(url or "")
+    return match.group(1) if match else None
+
+
+def fetch_tesla_feed(attempts: int = 2) -> dict:
+    last: SourceError | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            req = urllib.request.Request(TESLA_FEED_URL, headers=BROWSER_HEADERS)
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                data = json.loads(resp.read())
+            if not isinstance(data, dict) or "listings" not in data or "lookup" not in data:
+                raise SourceError("got JSON, but not Tesla's job feed")
+            return data
+        except urllib.error.HTTPError as exc:
+            last = SourceError(f"HTTP {exc.code} from Tesla")
+        except json.JSONDecodeError:
+            last = SourceError("Tesla sent a web page instead of JSON (probably a bot check)")
+        except SourceError as exc:
+            last = exc
+        except Exception as exc:  # timeouts, DNS, connection resets
+            last = SourceError(f"{type(exc).__name__}: {exc}")
+        print(f"tesla fetch attempt {attempt} failed: {last}", file=sys.stderr)
+        if attempt < attempts:
+            time.sleep(5)
+    raise last
+
+
+def parse_terms(title: str) -> list[str]:
+    """'Internship, X (Winter/Spring 2027)' -> ['Winter 2027', 'Spring 2027']."""
+    match = re.search(r"\(([^()]*20\d\d[^()]*)\)\s*$", title)
+    if not match:
+        return []
+    text = re.sub(r"([A-Za-z])(20\d\d)", r"\1 \2", match.group(1))
+    parts = [p.strip() for p in text.split("/") if p.strip()]
+    terms, year = [], None
+    for part in reversed(parts):  # the year usually sits on the last season only
+        found = re.search(r"20\d\d", part)
+        if found:
+            year = found.group(0)
+        season = re.sub(r"\s*20\d\d\s*", " ", part).strip()
+        terms.append(f"{season} {year}".strip() if year else season)
+    return list(reversed(terms))
+
+
+def tesla_date_estimator(known: dict[str, dict]):
+    """Tesla publishes no posting dates, but its job IDs go up over time.
+    Estimate a role's date from the Simplify dates of roles with nearby IDs."""
+    pairs = sorted((int(job), l["date_posted"]) for job, l in known.items() if l.get("date_posted"))
+    ids = [p[0] for p in pairs]
+
+    def estimate(job_id: int, now_ts: float) -> tuple[float, bool]:
+        if not pairs or job_id > ids[-1]:
+            return now_ts, False  # newer than anything Simplify has: treat as just posted
+        i = bisect.bisect_left(ids, job_id)
+        guess = statistics.median(p[1] for p in pairs[max(0, i - 3): i + 3])
+        # A role can't be posted after one with a higher ID.
+        return min(guess, min(p[1] for p in pairs[i:])), True
+
+    return estimate
+
+
+def load_tesla(simplify: list[dict], feed_file: str | None = None) -> list[dict]:
+    """Tesla internships that Simplify doesn't list as open, in Simplify's format."""
+    data = json.loads(Path(feed_file).read_text()) if feed_file else fetch_tesla_feed()
+    lookup = data["lookup"]
+    intern_types = {str(k) for k, v in lookup.get("types", {}).items() if "intern" in str(v).lower()}
+    if not intern_types:
+        raise SourceError("Tesla's feed format changed: no internship job type found")
+    locations = lookup.get("locations", {})
+    departments = lookup.get("departments", {})
+
+    known = {}  # Tesla job ID -> Simplify listing
+    for listing in simplify:
+        job = tesla_job_id(listing.get("url", ""))
+        if job and listing.get("company_name", "").lower() == "tesla":
+            known[job] = listing
+    estimate = tesla_date_estimator(known)
+    now_ts = time.time()
+
+    # Tesla posts one role per location; collapse identical titles into one entry.
+    groups: dict[str, list[dict]] = {}
+    for raw in data["listings"]:
+        if str(raw.get("y")) in intern_types and raw.get("t"):
+            groups.setdefault(" ".join(raw["t"].split()), []).append(raw)
+
+    out = []
+    for title, raws in groups.items():
+        ids = [str(r["id"]) for r in raws]
+        on_simplify = [known[i] for i in ids if i in known]
+        if any(l.get("active") for l in on_simplify):
+            continue  # Simplify lists it as open, so its listing covers this role
+        first = min(ids, key=int)
+        posted, estimated = estimate(int(first), now_ts)
+        department = departments.get(str(raws[0].get("dp")), "")
+        out.append({
+            "id": f"tesla:{first}",
+            "company_name": "Tesla",
+            "title": re.sub(r"^Internship,\s*", "", title),
+            "url": TESLA_JOB_URL.format(id=first),
+            "locations": list(dict.fromkeys(
+                locations[str(r.get("l"))] for r in raws if str(r.get("l")) in locations)),
+            "terms": parse_terms(title),
+            "category": TESLA_CATEGORY.get(department, department),
+            "degrees": [],
+            "active": True,
+            "is_visible": True,
+            "date_posted": posted,
+            "_date_estimated": estimated,
+            "_source": "tesla",
+            "_simplify": "closed" if on_simplify else "missing",
+            "_aliases": [f"tesla:{i}" for i in ids] + [l["id"] for l in on_simplify],
+        })
+    return out
+
+
+def run_direct_sources(args, config, simplify, sources_state, now) -> tuple[list[dict], list[tuple[str, str]]]:
+    """Fetch direct sources. Returns extra listings and notices to email.
+    Updates sources_state in place so a failing source is reported once."""
+    extra: list[dict] = []
+    notices: list[tuple[str, str]] = []
+    if not config.get("direct_sources", {}).get("tesla", {}).get("enabled"):
+        return extra, notices
+
+    health = sources_state.setdefault("tesla", {})
+    try:
+        tesla = load_tesla(simplify, args.tesla_file)
+    except (SourceError, OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"tesla source failed: {exc}", file=sys.stderr)
+        if not health.get("failing_since"):
+            health["failing_since"] = now.isoformat(timespec="seconds")
+        elif not health.get("notified") and now - datetime.fromisoformat(health["failing_since"]) > SOURCE_ALERT_AFTER:
+            notices.append((
+                "Tesla job feed isn't working",
+                f"The watcher hasn't been able to read Tesla's careers site since "
+                f"{health['failing_since']} UTC.\n\nLast error: {exc}\n\n"
+                "Simplify alerts still work. If this keeps happening, Tesla is probably "
+                "blocking GitHub's servers. You'll get one more email when it works again.",
+            ))
+            health["notified"] = True
+        health["last_error"] = str(exc)[:200]
+        return extra, notices
+
+    print(f"tesla: {len(tesla)} internships that Simplify doesn't list as open")
+    if health.get("notified"):
+        notices.append((
+            "Tesla job feed is working again",
+            "The watcher can read Tesla's careers site again, so alerts for Tesla roles "
+            "that aren't on Simplify are back on.",
+        ))
+    sources_state.pop("tesla", None)
+    return tesla, notices
+
+
+def aliases(listing: dict) -> set[str]:
+    """Every key one posting can appear under, so a role found on Tesla's site
+    and later added to Simplify (or the reverse) only emails you once."""
+    keys = {listing["id"], *listing.get("_aliases", [])}
+    job = tesla_job_id(listing.get("url", ""))
+    if job and listing.get("company_name", "").lower() == "tesla":
+        keys.add(f"tesla:{job}")
+    return keys
 
 
 # --------------------------------------------------------------------------- #
@@ -186,9 +385,11 @@ def load_state() -> dict | None:
     return json.loads(STATE_PATH.read_text())
 
 
-def save_state(seen: set[str], last_change: datetime) -> None:
+def save_state(seen: set[str], last_change: datetime, sources: dict | None = None) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     payload = {"last_change": last_change.isoformat(timespec="seconds"), "seen": sorted(seen)}
+    if sources:
+        payload["sources"] = sources
     STATE_PATH.write_text(json.dumps(payload, indent=1) + "\n")
 
 
@@ -215,18 +416,29 @@ def describe_age(posted: datetime, now: datetime) -> str:
     return f"{minutes // (60 * 24)} days ago"
 
 
+BADGES = {"missing": "Not on Simplify", "closed": "Simplify shows it closed"}
+
+
 def posting_fields(p: dict, tz, now: datetime) -> dict:
     posted = datetime.fromtimestamp(p.get("date_posted", 0), tz=timezone.utc)
-    stamp = posted.astimezone(tz).strftime("%b %d, %I:%M %p %Z").replace(" 0", " ")
+    age = describe_age(posted, now)
+    if p.get("_source") and p.get("_date_estimated"):
+        posted_text = f"Posted about {posted.astimezone(tz).strftime('%b %d').replace(' 0', ' ')} ({age}, estimated from job ID)"
+    elif p.get("_source"):
+        posted_text = f"Found on the company's site {age}"
+    else:
+        stamp = posted.astimezone(tz).strftime("%b %d, %I:%M %p %Z").replace(" 0", " ")
+        posted_text = f"Posted {stamp} ({age})"
     return {
         "title": p.get("title", "(untitled)"),
         "company": p.get("company_name", ""),
         "url": p.get("url", ""),
         "locations": ", ".join(p.get("locations") or []) or "Location not listed",
         "terms": ", ".join(p.get("terms") or []) or "Term not listed",
-        "posted": f"{stamp} ({describe_age(posted, now)})",
+        "posted": posted_text,
         "category": p.get("category", ""),
         "watch": p.get("_watch", ""),
+        "badge": BADGES.get(p.get("_simplify", ""), ""),
     }
 
 
@@ -257,6 +469,11 @@ def build_email(postings: list[dict], config: dict, heading: str) -> tuple[str, 
         subject = f"Internship watcher is live: {len(rows)} open roles"
     else:
         subject = f"[test] {len(rows)} open roles match your filters"
+    off_simplify = sum(1 for r in rows if r["badge"])
+    if off_simplify and len(rows) > 1:
+        subject += f" · {off_simplify} not on Simplify"
+    elif off_simplify:
+        subject += " (not on Simplify)"
 
     intro = {
         "new": "New postings that match your filters:",
@@ -277,6 +494,8 @@ def build_email(postings: list[dict], config: dict, heading: str) -> tuple[str, 
     text_lines = [intro, ""]
     html_parts = []
     for name, group in sections:
+        # Roles Simplify doesn't have go first: fewer people have seen them.
+        group = sorted(group, key=lambda r: not r["badge"])
         text_lines += [f"== {name} ({len(group)}) ==", ""]
         html_parts.append(
             f'<tr><td style="padding:20px 0 4px;font-size:13px;font-weight:700;letter-spacing:.04em;'
@@ -284,19 +503,25 @@ def build_email(postings: list[dict], config: dict, heading: str) -> tuple[str, 
         )
         for r in group:
             text_lines += [
-                r["title"],
+                f"[{r['badge']}] {r['title']}" if r["badge"] else r["title"],
                 f"  {r['company']} | {r['locations']} | {r['terms']}",
-                f"  Posted {r['posted']} | {r['category']}",
+                f"  {r['posted']} | {r['category']}",
                 f"  Apply: {r['url']}",
                 "",
             ]
+            badge_html = (
+                f'<span style="display:inline-block;background:#fef3c7;color:#92400e;border-radius:4px;'
+                f'padding:1px 6px;font-size:12px;font-weight:700;margin-bottom:4px">{escape(r["badge"])}</span><br>'
+                if r["badge"] else ""
+            )
             html_parts.append(f"""
         <tr><td style="padding:12px 0;border-bottom:1px solid #e5e5e5">
-          <a href="{escape(r['url'])}" style="font-size:16px;font-weight:600;color:#1a56db;text-decoration:none">{escape(r['title'])}</a>
+          {badge_html}<a href="{escape(r['url'])}" style="font-size:16px;font-weight:600;color:#1a56db;text-decoration:none">{escape(r['title'])}</a>
           <div style="color:#333;margin-top:4px"><b>{escape(r['company'])}</b> &middot; {escape(r['locations'])} &middot; {escape(r['terms'])}</div>
-          <div style="color:#777;font-size:13px;margin-top:2px">Posted {escape(r['posted'])} &middot; {escape(r['category'])}</div>
+          <div style="color:#777;font-size:13px;margin-top:2px">{escape(r['posted'])} &middot; {escape(r['category'])}</div>
         </td></tr>""")
-    text_lines.append("Source: SimplifyJobs internship feed")
+    footer = "Sources: SimplifyJobs internship feed" + (", Tesla careers site" if off_simplify else "")
+    text_lines.append(footer)
     text = "\n".join(text_lines)
 
     intro_html = escape(intro).replace("\n", "<br>")
@@ -304,9 +529,18 @@ def build_email(postings: list[dict], config: dict, heading: str) -> tuple[str, 
 <html><body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:620px;margin:0 auto;padding:16px;color:#111">
   <p style="margin:0 0 8px">{intro_html}</p>
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0">{''.join(html_parts)}</table>
-  <p style="color:#999;font-size:12px;margin-top:16px">Source: SimplifyJobs internship feed</p>
+  <p style="color:#999;font-size:12px;margin-top:16px">{footer}</p>
 </body></html>"""
     return subject, text, html
+
+
+def build_notice(subject: str, body: str) -> tuple[str, str, str]:
+    html_body = escape(body).replace("\n", "<br>")
+    html = f"""<!doctype html>
+<html><body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:620px;margin:0 auto;padding:16px;color:#111">
+  <p>{html_body}</p>
+</body></html>"""
+    return f"[watcher] {subject}", body, html
 
 
 def send_email(subject: str, text: str, html: str) -> None:
@@ -323,6 +557,8 @@ def send_email(subject: str, text: str, html: str) -> None:
     msg["Subject"] = subject
     msg["From"] = sender
     msg["To"] = ", ".join(to)
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="internship-watch")
     msg.set_content(text)
     msg.add_alternative(html, subtype="html")
 
@@ -339,8 +575,8 @@ def send_email(subject: str, text: str, html: str) -> None:
         server.send_message(msg)
 
 
-def deliver(postings, config, heading, dry_run) -> None:
-    subject, text, html = build_email(postings, config, heading)
+def deliver(postings, config, heading, dry_run, notice: tuple[str, str] | None = None) -> None:
+    subject, text, html = build_notice(*notice) if notice else build_email(postings, config, heading)
     if dry_run:
         print(f"--- dry run: would send ---\nSubject: {subject}\n\n{text}\n---")
         return
@@ -357,55 +593,67 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--test-email", action="store_true")
     parser.add_argument("--feed-file")
+    parser.add_argument("--tesla-file")
     args = parser.parse_args()
     if os.environ.get("TEST_EMAIL") in {"1", "true"}:
         args.test_email = True
 
     config = json.loads(CONFIG_PATH.read_text())
+    now = datetime.now(timezone.utc)
+    state = load_state()
+    sources_before = (state or {}).get("sources", {})
+    sources = copy.deepcopy(sources_before)
+
     listings = load_listings(args, config)
+    direct, notices = run_direct_sources(args, config, listings, sources, now)
+
     matcher = Matcher(config)
     open_roles = []
-    for listing in listings:
+    for listing in listings + direct:
         watch_name = matcher(listing)
         if watch_name:
             listing["_watch"] = watch_name
             open_roles.append(listing)
     open_roles.sort(key=lambda l: l.get("date_posted", 0), reverse=True)
-    print(f"feed has {len(listings)} listings; {len(open_roles)} open roles match")
+    print(f"Simplify has {len(listings)} listings; {len(open_roles)} open roles match")
     for watch in matcher.watches:
         print(f"  {watch.name}: {sum(1 for l in open_roles if l['_watch'] == watch.name)}")
+    print(f"  of those, not open on Simplify: {sum(1 for l in open_roles if l.get('_source'))}")
 
     if args.test_email:
         deliver(open_roles, config, "test", args.dry_run)
         return 0
 
-    now = datetime.now(timezone.utc)
-    state = load_state()
+    # Notices go out first: if email is broken, the run fails before anything
+    # is recorded, and the next run tries again.
+    for notice in notices:
+        deliver([], config, "", args.dry_run, notice=notice)
 
     if state is None:
         print("first run: recording current roles as seen")
         if config.get("notify_on_first_run", True):
             deliver(open_roles, config, "live", args.dry_run)
         if not args.dry_run:
-            save_state({l["id"] for l in open_roles}, now)
+            save_state(set().union(*(aliases(l) for l in open_roles)), now, sources)
         return 0
 
     seen = set(state.get("seen", []))
-    new = [l for l in open_roles if l["id"] not in seen]
+    new = [l for l in open_roles if not aliases(l) & seen]
     print(f"{len(new)} new")
+    last_change = datetime.fromisoformat(state.get("last_change", now.isoformat()))
 
     if new:
         # Send first. If the email fails, the run fails and the state stays
         # unchanged, so the next run retries the same postings.
         deliver(new, config, "new", args.dry_run)
-        if not args.dry_run:
-            save_state(seen | {l["id"] for l in new}, now)
-        return 0
-
-    last_change = datetime.fromisoformat(state.get("last_change", now.isoformat()))
-    if now - last_change > timedelta(days=HEARTBEAT_DAYS) and not args.dry_run:
+        seen |= set().union(*(aliases(l) for l in new))
+        last_change = now
+    elif now - last_change > timedelta(days=HEARTBEAT_DAYS):
         print("no changes for a while: refreshing state to keep the schedule alive")
-        save_state(seen, now)
+        last_change = now
+
+    if not args.dry_run and (new or last_change == now or sources != sources_before):
+        save_state(seen, last_change, sources)
     return 0
 
 

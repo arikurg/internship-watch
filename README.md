@@ -6,7 +6,7 @@ A GitHub Action that emails you when a new internship matches one of your watche
 - **AMD & NVIDIA**: software and AI/ML roles, plus hardware roles only when they're verification
 - **Embedded & firmware**: embedded, firmware, RTOS and flight software roles at any company, summer and off-season
 
-It reads the [SimplifyJobs internship feed](https://github.com/SimplifyJobs/Summer2027-Internships), which Simplify refreshes about every 30 minutes and which covers summer and off-season terms. The workflow checks four times an hour, compares matching open roles against `state/seen.json`, and emails you anything it hasn't seen. Tesla's careers site blocks most automated traffic, so the watcher doesn't touch it.
+It reads the [SimplifyJobs internship feed](https://github.com/SimplifyJobs/Summer2027-Internships), which Simplify refreshes about every 30 minutes and which covers summer and off-season terms. The workflow checks four times an hour, compares matching open roles against `state/seen.json`, and emails you anything it hasn't seen. It also reads Tesla's own careers feed, which catches the many Tesla roles Simplify never lists (see [Direct feeds](#direct-feeds-tesla)).
 
 ## Setup (about 10 minutes)
 
@@ -58,6 +58,25 @@ Preview what your filter matches without sending anything:
 ```sh
 python3 watch.py --dry-run --test-email
 ```
+
+## Direct feeds (Tesla)
+
+Simplify misses a lot. On Nov 21, 2026, about half of Tesla's open US engineering internships weren't on it. With `"direct_sources": {"tesla": {"enabled": true}}` in `config.json`, every run also reads Tesla's own careers feed. Tesla roles that Simplify doesn't list as open go through the same watches and filters, and the email marks them:
+
+- **Not on Simplify**: Simplify has never listed it.
+- **Simplify shows it closed**: Simplify marked it closed, but Tesla still lists it.
+
+Marked roles sort to the top of their section, and the subject line counts them.
+
+Details:
+
+- Tesla publishes no posting dates, so the email estimates one from the job ID. Tesla's IDs go up over time, and against 240 Tesla roles with known dates, 80% of estimates landed within 2 days. A role with a newer ID than anything Simplify has shows as "found on the company's site".
+- Tesla posts one listing per location. The watcher merges listings with the same title into one entry.
+- If Simplify later adds a role you already got from Tesla's site, you won't get a second email.
+- Tesla turns away some automated traffic. If the watcher can't read Tesla's feed for over an hour, you get one email saying so, and another when it works again. Simplify alerts keep running either way.
+- To turn it off, set `"enabled": false`.
+
+Test it locally against a saved copy of Tesla's feed with `python3 watch.py --dry-run --tesla-file tesla.json`.
 
 ## How fast are the alerts?
 
