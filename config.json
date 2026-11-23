@@ -2,7 +2,9 @@
   "feed_url": "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json",
   "direct_sources": {
     "tesla": {
-      "enabled": true
+      "enabled": true,
+      "feed_url": "https://raw.githubusercontent.com/arikurg/internship-watch/tesla-feed/tesla.json",
+      "max_age_hours": 24
     }
   },
   "watches": [

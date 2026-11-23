@@ -174,9 +174,41 @@ def tesla_date_estimator(known: dict[str, dict]):
     return estimate
 
 
-def load_tesla(simplify: list[dict], feed_file: str | None = None) -> list[dict]:
+def fetch_published_feed(url: str, max_age_hours: float) -> dict:
+    """Read the Tesla feed that fetch_tesla.py publishes from your laptop."""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "internship-watch"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise SourceError("no Tesla feed has been published yet. Run `python3 fetch_tesla.py` on your laptop.")
+        raise SourceError(f"HTTP {exc.code} reading the published Tesla feed")
+    except json.JSONDecodeError:
+        raise SourceError("the published Tesla feed isn't valid JSON")
+    except urllib.error.URLError as exc:
+        raise SourceError(f"couldn't read the published Tesla feed: {exc.reason}")
+    if not isinstance(data, dict) or "fetched_at" not in data or "listings" not in data:
+        raise SourceError("the published Tesla feed is missing fields; re-run fetch_tesla.py")
+    fetched = datetime.fromisoformat(data["fetched_at"])
+    now = datetime.now(timezone.utc)
+    if now - fetched > timedelta(hours=max_age_hours):
+        raise SourceError(
+            f"your laptop last published Tesla's feed {describe_age(fetched, now)}. Check that the "
+            "laptop is on and online, and that fetch_tesla.py is still installed (python3 fetch_tesla.py --install)."
+        )
+    return data
+
+
+def load_tesla(simplify: list[dict], feed_file: str | None = None, feed_url: str | None = None,
+               max_age_hours: float = 24) -> list[dict]:
     """Tesla internships that Simplify doesn't list as open, in Simplify's format."""
-    data = json.loads(Path(feed_file).read_text()) if feed_file else fetch_tesla_feed()
+    if feed_file:
+        data = json.loads(Path(feed_file).read_text())
+    elif feed_url:
+        data = fetch_published_feed(feed_url, max_age_hours)
+    else:
+        data = fetch_tesla_feed()
     lookup = data["lookup"]
     intern_types = {str(k) for k, v in lookup.get("types", {}).items() if "intern" in str(v).lower()}
     if not intern_types:
@@ -233,23 +265,26 @@ def run_direct_sources(args, config, simplify, sources_state, now) -> tuple[list
     Updates sources_state in place so a failing source is reported once."""
     extra: list[dict] = []
     notices: list[tuple[str, str]] = []
-    if not config.get("direct_sources", {}).get("tesla", {}).get("enabled"):
+    cfg = config.get("direct_sources", {}).get("tesla", {})
+    if not cfg.get("enabled"):
         return extra, notices
 
     health = sources_state.setdefault("tesla", {})
     try:
-        tesla = load_tesla(simplify, args.tesla_file)
+        tesla = load_tesla(simplify, args.tesla_file, cfg.get("feed_url"), cfg.get("max_age_hours", 24))
     except (SourceError, OSError, ValueError, KeyError, TypeError) as exc:
         print(f"tesla source failed: {exc}", file=sys.stderr)
         if not health.get("failing_since"):
             health["failing_since"] = now.isoformat(timespec="seconds")
         elif not health.get("notified") and now - datetime.fromisoformat(health["failing_since"]) > SOURCE_ALERT_AFTER:
+            hint = "" if cfg.get("feed_url") else (
+                " Tesla blocks GitHub's servers, so set up fetch_tesla.py on your laptop (see the README)."
+            )
             notices.append((
                 "Tesla job feed isn't working",
-                f"The watcher hasn't been able to read Tesla's careers site since "
-                f"{health['failing_since']} UTC.\n\nLast error: {exc}\n\n"
-                "Simplify alerts still work. If this keeps happening, Tesla is probably "
-                "blocking GitHub's servers. You'll get one more email when it works again.",
+                f"The watcher hasn't been able to get Tesla's listings since "
+                f"{health['failing_since']} UTC.\n\nLast error: {exc}{hint}\n\n"
+                "Simplify alerts still work. You'll get one more email when Tesla's listings come back.",
             ))
             health["notified"] = True
         health["last_error"] = str(exc)[:200]
