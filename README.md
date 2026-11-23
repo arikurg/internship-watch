@@ -2,11 +2,11 @@
 
 A GitHub Action that emails you when a new internship matches one of your watches:
 
-- **Tesla software**: software, firmware, ML and controls roles at Tesla (plus a one-click browser check for Tesla roles Simplify misses)
+- **Tesla software**: software, firmware, ML and controls roles at Tesla (including Tesla roles Simplify misses, via the Chrome extension)
 - **AMD & NVIDIA**: software and AI/ML roles, plus hardware roles only when they're verification
 - **Embedded & firmware**: embedded, firmware, RTOS and flight software roles at any company, summer and off-season
 
-It reads the [SimplifyJobs internship feed](https://github.com/SimplifyJobs/Summer2027-Internships), which Simplify refreshes about every 30 minutes and which covers summer and off-season terms. The workflow checks four times an hour, compares matching open roles against `state/seen.json`, and emails you anything it hasn't seen. For Tesla roles Simplify never lists, there's a one-click check you run in your browser (see [Tesla roles Simplify misses](#tesla-roles-simplify-misses)).
+It reads the [SimplifyJobs internship feed](https://github.com/SimplifyJobs/Summer2027-Internships), which Simplify refreshes about every 30 minutes and which covers summer and off-season terms. The workflow checks four times an hour, compares matching open roles against `state/seen.json`, and emails you anything it hasn't seen. Tesla roles Simplify never lists come in through a small Chrome extension (see [Tesla roles Simplify misses](#tesla-roles-simplify-misses)).
 
 ## Setup (about 10 minutes)
 
@@ -61,18 +61,32 @@ python3 watch.py --dry-run --test-email
 
 ## Tesla roles Simplify misses
 
-Simplify misses a lot of Tesla. On Nov 21, 2026, about half of Tesla's open US engineering internships weren't on it. Tesla's careers site has them all, but it only serves real browsers: scripts get HTTP 403 whether they run on GitHub's servers or a home laptop. So the watcher doesn't fetch Tesla. You check it in your own browser with one click instead.
+Simplify misses a lot of Tesla. On Nov 21, 2026, about half of Tesla's open US engineering internships weren't on it. Tesla's careers site has them all, but it only serves real browsers: scripts get HTTP 403 whether they run on GitHub's servers or a home laptop. So Tesla gets read from inside your Chrome, two ways.
 
-**Set up the Tesla check:** open `tesla_bookmarklet.html` from this repo in your browser and drag the **Tesla check** button onto your bookmarks bar. Then, on [tesla.com/careers](https://www.tesla.com/careers/search/), click the bookmark. A panel lists Tesla internships that:
+### Email alerts: the Chrome extension
 
-- match the Tesla and any-company watches in your `config.json` (title keywords, `title_exclude`, `us_only`, `skip_terms`), and
-- Simplify doesn't list as open (marked "Not on Simplify" or "Simplify shows it closed").
+`tesla-extension/` is a small Chrome extension. Every 3 hours while you're using your computer, it reads Tesla's internship list with one background request (about 300 KB) and publishes it to a private GitHub Gist. It never opens tabs. The watcher reads the Gist, runs Tesla roles through your watches, and emails new ones marked **Not on Simplify** or **Simplify shows it closed**, with no duplicates if Simplify adds them later.
 
-**NEW** marks roles that browser hasn't shown you before. Tesla publishes no posting dates, so the panel estimates them from job IDs, which go up over time. Against 240 Tesla roles with known dates, 80% of estimates landed within 2 days.
+Setup (about 5 minutes):
 
-The check reads your filters from `config.json` on GitHub, so push config changes before relying on them. If your browser won't run the bookmark, paste `tesla_check.js` into the console on tesla.com.
+1. **Make a token** that can only edit gists: GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token. Under **Account permissions**, set **Gists** to *Read and write*. Leave repository access at the default. It can't touch your repos.
+2. **Load the extension:** open `chrome://extensions`, turn on **Developer mode** (top right), click **Load unpacked**, and choose the `tesla-extension` folder.
+3. **Connect it:** the options page opens. Paste the token and click **Save and check now**. It creates a private gist and shows a `config.json` snippet.
+4. **Turn it on in the watcher:** in `config.json`, replace the `"tesla"` entry under `direct_sources` with that snippet, then push.
 
-`watch.py` still has code for reading Tesla directly (`direct_sources.tesla` in `config.json`), switched off. It works again if Tesla ever opens its feed to scripts.
+The next watcher run emails every matching Tesla role that isn't open on Simplify. After that, you only hear about new ones.
+
+Good to know:
+
+- It runs while Chrome is running and you're using the computer. A check that comes due while you're away or the screen is locked waits until you're back. Change the interval (1, 3 or 6 hours) on the extension's options page.
+- Tesla served its job list to Chrome without cookies in testing, so the background request should keep working. If Tesla ever refuses it, the extension doesn't open anything: the next time you visit tesla.com/careers yourself, it reads the list from that page.
+- When nothing changed, it skips publishing, and it republishes at least every 12 hours so the watcher knows it's alive. If the Gist goes 48 hours without an update (`max_age_hours`), you get one email about it, and Simplify alerts keep working.
+- Click the extension's icon to see the last check. A red **!** means the last check failed.
+- Tesla publishes no posting dates, so emails estimate them from job IDs, which go up over time. Against 240 Tesla roles with known dates, 80% of estimates landed within 2 days.
+
+### Manual check: the bookmark
+
+`tesla_bookmarklet.html` installs a **Tesla check** bookmark. On tesla.com/careers, click it to see the same matching roles in a panel, with **NEW** on ones that browser hasn't shown you. It reads your filters from `config.json` on GitHub, so push changes before relying on them.
 
 ## How fast are the alerts?
 

@@ -92,9 +92,9 @@ def load_listings(args, config) -> list[dict]:
 TESLA_FEED_URL = "https://www.tesla.com/cua-api/apps/careers/state"
 TESLA_JOB_URL = "https://www.tesla.com/careers/search/job/{id}"
 TESLA_JOB_ID = re.compile(r"tesla\.com/careers/search/job/(?:[^/?#]*-)?(\d{5,7})(?:[/?#]|$)")
-# As of Nov 2026 Tesla answers scripts with HTTP 403 from any network, so this
-# source ships disabled; use tesla_check.js in your browser instead. The code
-# stays so it works again if Tesla ever opens the feed to scripts.
+# As of Nov 2026 Tesla answers scripts with HTTP 403 from any network, so the
+# watcher reads Tesla through the Chrome extension's Gist (feed_url) instead.
+# Direct fetching stays here in case Tesla ever opens the feed to scripts.
 FEED_HEADERS = {
     "User-Agent": "internship-watch (https://github.com/arikurg/internship-watch)",
     "Accept": "application/json",
@@ -172,27 +172,27 @@ def tesla_date_estimator(known: dict[str, dict]):
 
 
 def fetch_published_feed(url: str, max_age_hours: float) -> dict:
-    """Read the Tesla feed that fetch_tesla.py publishes from your laptop."""
+    """Read the Tesla feed that the Internship Watch Chrome extension publishes to a Gist."""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "internship-watch"})
         with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read())
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
-            raise SourceError("no Tesla feed has been published yet. Run `python3 fetch_tesla.py` on your laptop.")
+            raise SourceError("no Tesla feed found at feed_url. Open the Internship Watch extension's options in Chrome and click Save and check now.")
         raise SourceError(f"HTTP {exc.code} reading the published Tesla feed")
     except json.JSONDecodeError:
         raise SourceError("the published Tesla feed isn't valid JSON")
     except urllib.error.URLError as exc:
         raise SourceError(f"couldn't read the published Tesla feed: {exc.reason}")
     if not isinstance(data, dict) or "fetched_at" not in data or "listings" not in data:
-        raise SourceError("the published Tesla feed is missing fields; re-run fetch_tesla.py")
+        raise SourceError("the published Tesla feed is missing fields. Click Save and check now in the extension's options.")
     fetched = datetime.fromisoformat(data["fetched_at"])
     now = datetime.now(timezone.utc)
     if now - fetched > timedelta(hours=max_age_hours):
         raise SourceError(
-            f"your laptop last published Tesla's feed {describe_age(fetched, now)}. Check that the "
-            "laptop is on and online, and that fetch_tesla.py is still installed (python3 fetch_tesla.py --install)."
+            f"the Chrome extension last published Tesla's list {describe_age(fetched, now)}. It only runs "
+            "while Chrome is open; open Chrome, or click Save and check now in the extension's options."
         )
     return data
 
@@ -276,7 +276,7 @@ def run_direct_sources(args, config, simplify, sources_state, now) -> tuple[list
             health["failing_since"] = now.isoformat(timespec="seconds")
         elif not health.get("notified") and now - datetime.fromisoformat(health["failing_since"]) > SOURCE_ALERT_AFTER:
             hint = "" if cfg.get("feed_url") else (
-                " Tesla blocks GitHub's servers, so set up fetch_tesla.py on your laptop (see the README)."
+                " Tesla blocks scripts, so set feed_url to the Chrome extension's Gist (see the README)."
             )
             notices.append((
                 "Tesla job feed isn't working",
