@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Install the Tesla internship check</title>
+<style>
+ body { font: 16px/1.5 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; max-width: 640px; margin: 48px auto; padding: 0 20px; color: #111; }
+ .btn { display: inline-block; padding: 10px 16px; background: #1a56db; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; cursor: grab; }
+ ol li { margin-bottom: 8px; }
+ textarea { width: 100%; height: 120px; font: 12px ui-monospace, Menlo, monospace; }
+ .muted { color: #666; font-size: 14px; }
+</style></head><body>
+<h1>Tesla internship check</h1>
+<p>Tesla's site only serves real browsers, so your watcher can't fetch it. This bookmark does the check inside your browser when you click it, as part of a normal visit.</p>
+<ol>
+ <li>Show your bookmarks bar (Chrome: <b>⌘⇧B</b> on Mac, <b>Ctrl+Shift+B</b> on Windows).</li>
+ <li>Drag this button onto the bookmarks bar: <a class="btn" href="javascript:%28async%20%28%29%20%3D%3E%20%7B%0A%20%20const%20REPO_CONFIG%20%3D%20%22https%3A%2F%2Fraw.githubusercontent.com%2Farikurg%2Finternship-watch%2Fmain%2Fconfig.json%22%3B%0A%20%20const%20SIMPLIFY%20%3D%20%22https%3A%2F%2Fraw.githubusercontent.com%2FSimplifyJobs%2FSummer2027-Internships%2Fdev%2F.github%2Fscripts%2Flistings.json%22%3B%0A%20%20const%20SEEN_KEY%20%3D%20%22internship-watch-seen%22%3B%0A%20%20const%20STATES%20%3D%20%5B%22Alabama%22%2C%20%22Alaska%22%2C%20%22Arizona%22%2C%20%22Arkansas%22%2C%20%22California%22%2C%20%22Colorado%22%2C%20%22Connecticut%22%2C%20%22Delaware%22%2C%0A%20%20%20%20%22Florida%22%2C%20%22Georgia%22%2C%20%22Hawaii%22%2C%20%22Idaho%22%2C%20%22Illinois%22%2C%20%22Indiana%22%2C%20%22Iowa%22%2C%20%22Kansas%22%2C%20%22Kentucky%22%2C%20%22Louisiana%22%2C%0A%20%20%20%20%22Maine%22%2C%20%22Maryland%22%2C%20%22Massachusetts%22%2C%20%22Michigan%22%2C%20%22Minnesota%22%2C%20%22Mississippi%22%2C%20%22Missouri%22%2C%20%22Montana%22%2C%0A%20%20%20%20%22Nebraska%22%2C%20%22Nevada%22%2C%20%22New%20Hampshire%22%2C%20%22New%20Jersey%22%2C%20%22New%20Mexico%22%2C%20%22New%20York%22%2C%20%22North%20Carolina%22%2C%0A%20%20%20%20%22North%20Dakota%22%2C%20%22Ohio%22%2C%20%22Oklahoma%22%2C%20%22Oregon%22%2C%20%22Pennsylvania%22%2C%20%22Rhode%20Island%22%2C%20%22South%20Carolina%22%2C%0A%20%20%20%20%22South%20Dakota%22%2C%20%22Tennessee%22%2C%20%22Texas%22%2C%20%22Utah%22%2C%20%22Vermont%22%2C%20%22Virginia%22%2C%20%22Washington%22%2C%20%22West%20Virginia%22%2C%0A%20%20%20%20%22Wisconsin%22%2C%20%22Wyoming%22%2C%20%22District%20of%20Columbia%22%2C%20%22Puerto%20Rico%22%5D%3B%0A%0A%20%20const%20panel%20%3D%20document.getElementById%28%22iw-panel%22%29%20%7C%7C%20document.createElement%28%22div%22%29%3B%0A%20%20panel.id%20%3D%20%22iw-panel%22%3B%0A%20%20panel.style.cssText%20%3D%20%22position%3Afixed%3Btop%3A16px%3Bright%3A16px%3Bwidth%3A460px%3Bmax-height%3A85vh%3Boverflow%3Aauto%3Bz-index%3A2147483647%3B%22%20%2B%0A%20%20%20%20%22background%3A%23fff%3Bcolor%3A%23111%3Bfont%3A14px%2F1.4%20-apple-system%2CSegoe%20UI%2CRoboto%2CHelvetica%2CArial%2Csans-serif%3B%22%20%2B%0A%20%20%20%20%22border%3A1px%20solid%20%23ddd%3Bborder-radius%3A10px%3Bbox-shadow%3A0%208px%2030px%20rgba%280%2C0%2C0%2C.18%29%3Bpadding%3A14px%2016px%22%3B%0A%20%20const%20esc%20%3D%20s%20%3D%3E%20String%28s%29.replace%28%2F%5B%26%3C%3E%22%5D%2Fg%2C%20c%20%3D%3E%20%28%7B%20%22%26%22%3A%20%22%26amp%3B%22%2C%20%22%3C%22%3A%20%22%26lt%3B%22%2C%20%22%3E%22%3A%20%22%26gt%3B%22%2C%20%27%22%27%3A%20%22%26quot%3B%22%20%7D%5Bc%5D%29%29%3B%0A%20%20const%20show%20%3D%20html%20%3D%3E%20%7B%0A%20%20%20%20panel.innerHTML%20%3D%20%27%3Cdiv%20style%3D%22display%3Aflex%3Bjustify-content%3Aspace-between%3Balign-items%3Acenter%3Bmargin-bottom%3A8px%22%3E%27%20%2B%0A%20%20%20%20%20%20%27%3Cb%3ETesla%20internships%20not%20on%20Simplify%3C%2Fb%3E%3Cbutton%20id%3D%22iw-close%22%20style%3D%22border%3A0%3Bbackground%3Anone%3Bfont-size%3A18px%3Bcursor%3Apointer%22%3E%C3%97%3C%2Fbutton%3E%3C%2Fdiv%3E%27%20%2B%20html%3B%0A%20%20%20%20document.body.appendChild%28panel%29%3B%0A%20%20%20%20document.getElementById%28%22iw-close%22%29.onclick%20%3D%20%28%29%20%3D%3E%20panel.remove%28%29%3B%0A%20%20%7D%3B%0A%0A%20%20if%20%28%21%2F%28%5E%7C%5C.%29tesla%5C.com%24%2F.test%28location.hostname%29%29%20%7B%0A%20%20%20%20show%28%22%3Cp%3EOpen%20%3Ca%20href%3D%27https%3A%2F%2Fwww.tesla.com%2Fcareers%2Fsearch%2F%27%3Etesla.com%2Fcareers%3C%2Fa%3E%20first%2C%20then%20click%20this%20again.%3C%2Fp%3E%22%29%3B%0A%20%20%20%20return%3B%0A%20%20%7D%0A%20%20show%28%22%3Cp%3EChecking%20Tesla%20and%20Simplify%E2%80%A6%3C%2Fp%3E%22%29%3B%0A%0A%20%20try%20%7B%0A%20%20%20%20const%20%5Btesla%2C%20simplify%2C%20config%5D%20%3D%20await%20Promise.all%28%5B%0A%20%20%20%20%20%20fetch%28%22%2Fcua-api%2Fapps%2Fcareers%2Fstate%22%29.then%28r%20%3D%3E%20%7B%20if%20%28%21r.ok%29%20throw%20new%20Error%28%22Tesla%20returned%20HTTP%20%22%20%2B%20r.status%29%3B%20return%20r.json%28%29%3B%20%7D%29%2C%0A%20%20%20%20%20%20fetch%28SIMPLIFY%29.then%28r%20%3D%3E%20r.json%28%29%29%2C%0A%20%20%20%20%20%20fetch%28REPO_CONFIG%2C%20%7B%20cache%3A%20%22no-store%22%20%7D%29.then%28r%20%3D%3E%20r.json%28%29%29%2C%0A%20%20%20%20%5D%29%3B%0A%0A%20%20%20%20const%20words%20%3D%20list%20%3D%3E%20list%20%26%26%20list.length%0A%20%20%20%20%20%20%3F%20new%20RegExp%28%22%5C%5Cb%28%3F%3A%22%20%2B%20list.map%28w%20%3D%3E%20w.trim%28%29.replace%28%2F%5B.%2A%2B%3F%5E%24%7B%7D%28%29%7C%5B%5C%5D%5C%5C%5D%2Fg%2C%20%22%5C%5C%24%26%22%29%29.join%28%22%7C%22%29%20%2B%20%22%29%5C%5Cb%22%2C%20%22i%22%29%0A%20%20%20%20%20%20%3A%20null%3B%0A%20%20%20%20const%20watches%20%3D%20config.watches%0A%20%20%20%20%20%20.filter%28w%20%3D%3E%20w.companies%20%3D%3D%3D%20%22any%22%20%7C%7C%20%28w.companies%20%7C%7C%20%5B%5D%29.some%28c%20%3D%3E%20c.toLowerCase%28%29%20%3D%3D%3D%20%22tesla%22%29%29%0A%20%20%20%20%20%20.map%28w%20%3D%3E%20%28%7B%0A%20%20%20%20%20%20%20%20name%3A%20w.name%2C%0A%20%20%20%20%20%20%20%20include%3A%20words%28w.title_keywords%29%2C%0A%20%20%20%20%20%20%20%20exclude%3A%20words%28w.title_exclude%20%7C%7C%20config.title_exclude%29%2C%0A%20%20%20%20%20%20%7D%29%29%3B%0A%20%20%20%20const%20skipTerms%20%3D%20new%20Set%28%28config.skip_terms%20%7C%7C%20%5B%5D%29.map%28t%20%3D%3E%20t.toLowerCase%28%29%29%29%3B%0A%20%20%20%20const%20isUS%20%3D%20loc%20%3D%3E%20STATES.some%28s%20%3D%3E%20loc%20%3D%3D%3D%20s%20%7C%7C%20loc.endsWith%28%22%2C%20%22%20%2B%20s%29%29%3B%0A%0A%20%20%20%20const%20onSimplify%20%3D%20%7B%7D%3B%0A%20%20%20%20const%20dated%20%3D%20%5B%5D%3B%0A%20%20%20%20for%20%28const%20x%20of%20simplify%29%20%7B%0A%20%20%20%20%20%20if%20%28x.company_name%20%21%3D%3D%20%22Tesla%22%29%20continue%3B%0A%20%20%20%20%20%20const%20m%20%3D%20%28x.url%20%7C%7C%20%22%22%29.match%28%2Ftesla%5C.com%5C%2Fcareers%5C%2Fsearch%5C%2Fjob%5C%2F%28%3F%3A%5B%5E%2F%3F%23%5D%2A-%29%3F%28%5Cd%7B5%2C7%7D%29%2F%29%3B%0A%20%20%20%20%20%20if%20%28%21m%29%20continue%3B%0A%20%20%20%20%20%20onSimplify%5Bm%5B1%5D%5D%20%3D%20x%3B%0A%20%20%20%20%20%20if%20%28x.date_posted%29%20dated.push%28%5B%2Bm%5B1%5D%2C%20x.date_posted%5D%29%3B%0A%20%20%20%20%7D%0A%20%20%20%20dated.sort%28%28a%2C%20b%29%20%3D%3E%20a%5B0%5D%20-%20b%5B0%5D%29%3B%0A%20%20%20%20const%20estimate%20%3D%20id%20%3D%3E%20%7B%0A%20%20%20%20%20%20if%20%28%21dated.length%20%7C%7C%20id%20%3E%20dated%5Bdated.length%20-%201%5D%5B0%5D%29%20return%20null%3B%0A%20%20%20%20%20%20let%20i%20%3D%20dated.findIndex%28p%20%3D%3E%20p%5B0%5D%20%3E%3D%20id%29%3B%0A%20%20%20%20%20%20const%20near%20%3D%20dated.slice%28Math.max%280%2C%20i%20-%203%29%2C%20i%20%2B%203%29.map%28p%20%3D%3E%20p%5B1%5D%29.sort%28%28a%2C%20b%29%20%3D%3E%20a%20-%20b%29%3B%0A%20%20%20%20%20%20const%20later%20%3D%20Math.min%28...dated.slice%28i%29.map%28p%20%3D%3E%20p%5B1%5D%29%29%3B%0A%20%20%20%20%20%20return%20Math.min%28near%5BMath.floor%28near.length%20%2F%202%29%5D%2C%20later%29%3B%0A%20%20%20%20%7D%3B%0A%0A%20%20%20%20const%20L%20%3D%20tesla.lookup%3B%0A%20%20%20%20const%20internTypes%20%3D%20new%20Set%28Object.entries%28L.types%29.filter%28%28%5B%2C%20v%5D%29%20%3D%3E%20%2Fintern%2Fi.test%28v%29%29.map%28%28%5Bk%5D%29%20%3D%3E%20k%29%29%3B%0A%20%20%20%20const%20groups%20%3D%20%7B%7D%3B%0A%20%20%20%20for%20%28const%20x%20of%20tesla.listings%29%20%7B%0A%20%20%20%20%20%20if%20%28%21internTypes.has%28String%28x.y%29%29%20%7C%7C%20%21x.t%29%20continue%3B%0A%20%20%20%20%20%20const%20title%20%3D%20x.t.replace%28%2F%5Cs%2B%2Fg%2C%20%22%20%22%29.trim%28%29%3B%0A%20%20%20%20%20%20%28groups%5Btitle%5D%20%3D%20groups%5Btitle%5D%20%7C%7C%20%5B%5D%29.push%28x%29%3B%0A%20%20%20%20%7D%0A%0A%20%20%20%20const%20seen%20%3D%20new%20Set%28JSON.parse%28localStorage.getItem%28SEEN_KEY%29%20%7C%7C%20%22%5B%5D%22%29%29%3B%0A%20%20%20%20const%20rows%20%3D%20%5B%5D%3B%0A%20%20%20%20for%20%28const%20%5Btitle%2C%20xs%5D%20of%20Object.entries%28groups%29%29%20%7B%0A%20%20%20%20%20%20const%20ids%20%3D%20xs.map%28x%20%3D%3E%20String%28x.id%29%29%3B%0A%20%20%20%20%20%20const%20known%20%3D%20ids.map%28i%20%3D%3E%20onSimplify%5Bi%5D%29.filter%28Boolean%29%3B%0A%20%20%20%20%20%20if%20%28known.some%28k%20%3D%3E%20k.active%29%29%20continue%3B%0A%20%20%20%20%20%20const%20locs%20%3D%20%5B...new%20Set%28xs.map%28x%20%3D%3E%20L.locations%5Bx.l%5D%29.filter%28Boolean%29%29%5D%3B%0A%20%20%20%20%20%20if%20%28config.us_only%20%26%26%20locs.length%20%26%26%20%21locs.some%28isUS%29%29%20continue%3B%0A%20%20%20%20%20%20const%20term%20%3D%20%28title.match%28%2F%5C%28%28%5B%5E%28%29%5D%2A20%5Cd%5Cd%5B%5E%28%29%5D%2A%29%5C%29%5Cs%2A%24%2F%29%20%7C%7C%20%5B%5D%29%5B1%5D%20%7C%7C%20%22%22%3B%0A%20%20%20%20%20%20const%20terms%20%3D%20term.replace%28%2F%28%5BA-Za-z%5D%29%2820%5Cd%5Cd%29%2Fg%2C%20%22%241%20%242%22%29.split%28%22%2F%22%29.map%28s%20%3D%3E%20s.trim%28%29%29.filter%28Boolean%29%3B%0A%20%20%20%20%20%20const%20year%20%3D%20%28term.match%28%2F20%5Cd%5Cd%2Fg%29%20%7C%7C%20%5B%5D%29.pop%28%29%3B%0A%20%20%20%20%20%20const%20full%20%3D%20terms.map%28s%20%3D%3E%20%2F20%5Cd%5Cd%2F.test%28s%29%20%3F%20s%20%3A%20s%20%2B%20%22%20%22%20%2B%20year%29.map%28s%20%3D%3E%20s.toLowerCase%28%29%29%3B%0A%20%20%20%20%20%20if%20%28skipTerms.size%20%26%26%20full.length%20%26%26%20full.every%28t%20%3D%3E%20skipTerms.has%28t%29%29%29%20continue%3B%0A%20%20%20%20%20%20const%20dept%20%3D%20L.departments%5Bxs%5B0%5D.dp%5D%20%7C%7C%20%22%22%3B%0A%20%20%20%20%20%20const%20watch%20%3D%20watches.find%28w%20%3D%3E%0A%20%20%20%20%20%20%20%20%21%28w.exclude%20%26%26%20w.exclude.test%28title%29%29%20%26%26%0A%20%20%20%20%20%20%20%20%28w.include%20%26%26%20w.include.test%28title%29%29%29%3B%0A%20%20%20%20%20%20if%20%28%21watch%29%20continue%3B%0A%20%20%20%20%20%20const%20first%20%3D%20ids.map%28Number%29.sort%28%28a%2C%20b%29%20%3D%3E%20a%20-%20b%29%5B0%5D%3B%0A%20%20%20%20%20%20rows.push%28%7B%0A%20%20%20%20%20%20%20%20id%3A%20String%28first%29%2C%20title%3A%20title.replace%28%2F%5EInternship%2C%5Cs%2A%2F%2C%20%22%22%29%2C%20locs%2C%20dept%2C%20watch%3A%20watch.name%2C%0A%20%20%20%20%20%20%20%20posted%3A%20estimate%28first%29%2C%20isNew%3A%20%21ids.some%28i%20%3D%3E%20seen.has%28i%29%29%2C%20ids%2C%0A%20%20%20%20%20%20%20%20status%3A%20known.length%20%3F%20%22Simplify%20shows%20it%20closed%22%20%3A%20%22Not%20on%20Simplify%22%2C%0A%20%20%20%20%20%20%7D%29%3B%0A%20%20%20%20%7D%0A%20%20%20%20rows.sort%28%28a%2C%20b%29%20%3D%3E%20%28b.isNew%20-%20a.isNew%29%20%7C%7C%20%28%28b.posted%20%7C%7C%209e12%29%20-%20%28a.posted%20%7C%7C%209e12%29%29%29%3B%0A%0A%20%20%20%20const%20fmt%20%3D%20ts%20%3D%3E%20ts%20%3F%20%22posted%20about%20%22%20%2B%20new%20Date%28ts%20%2A%201000%29.toLocaleDateString%28undefined%2C%20%7B%20month%3A%20%22short%22%2C%20day%3A%20%22numeric%22%20%7D%29%20%3A%20%22newer%20than%20anything%20on%20Simplify%22%3B%0A%20%20%20%20const%20newCount%20%3D%20rows.filter%28r%20%3D%3E%20r.isNew%29.length%3B%0A%20%20%20%20show%28%60%3Cp%20style%3D%22margin%3A0%200%2010px%3Bcolor%3A%23555%22%3E%24%7Brows.length%7D%20matching%20role%24%7Brows.length%20%3D%3D%3D%201%20%3F%20%22%22%20%3A%20%22s%22%7D%60%20%2B%0A%20%20%20%20%20%20%60%24%7BnewCount%20%3F%20%60%2C%20%3Cb%3E%24%7BnewCount%7D%20new%3C%2Fb%3E%20since%20your%20last%20check%60%20%3A%20%22%2C%20none%20new%20since%20your%20last%20check%22%7D.%3C%2Fp%3E%60%20%2B%0A%20%20%20%20%20%20rows.map%28r%20%3D%3E%20%60%3Cdiv%20style%3D%22padding%3A9px%200%3Bborder-top%3A1px%20solid%20%23eee%22%3E%60%20%2B%0A%20%20%20%20%20%20%20%20%28r.isNew%20%3F%20%27%3Cspan%20style%3D%22background%3A%23dcfce7%3Bcolor%3A%23166534%3Bborder-radius%3A4px%3Bpadding%3A1px%206px%3Bfont-size%3A11px%3Bfont-weight%3A700%3Bmargin-right%3A6px%22%3ENEW%3C%2Fspan%3E%27%20%3A%20%22%22%29%20%2B%0A%20%20%20%20%20%20%20%20%60%3Ca%20href%3D%22%2Fcareers%2Fsearch%2Fjob%2F%24%7Br.id%7D%22%20target%3D%22_blank%22%20style%3D%22color%3A%231a56db%3Bfont-weight%3A600%3Btext-decoration%3Anone%22%3E%24%7Besc%28r.title%29%7D%3C%2Fa%3E%60%20%2B%0A%20%20%20%20%20%20%20%20%60%3Cdiv%20style%3D%22color%3A%23444%3Bfont-size%3A13px%22%3E%24%7Besc%28r.locs.join%28%22%2C%20%22%29%20%7C%7C%20%22Location%20not%20listed%22%29%7D%3C%2Fdiv%3E%60%20%2B%0A%20%20%20%20%20%20%20%20%60%3Cdiv%20style%3D%22color%3A%23888%3Bfont-size%3A12px%22%3E%24%7Besc%28fmt%28r.posted%29%29%7D%20%C2%B7%20%24%7Besc%28r.status%29%7D%20%C2%B7%20%24%7Besc%28r.watch%29%7D%3C%2Fdiv%3E%3C%2Fdiv%3E%60%29.join%28%22%22%29%20%2B%0A%20%20%20%20%20%20%27%3Cp%20style%3D%22color%3A%23999%3Bfont-size%3A11px%3Bmargin%3A10px%200%200%22%3EFilters%20come%20from%20your%20internship-watch%20config.json.%3C%2Fp%3E%27%29%3B%0A%0A%20%20%20%20rows.forEach%28r%20%3D%3E%20r.ids.forEach%28i%20%3D%3E%20seen.add%28i%29%29%29%3B%0A%20%20%20%20localStorage.setItem%28SEEN_KEY%2C%20JSON.stringify%28%5B...seen%5D%29%29%3B%0A%20%20%20%20window.__iwResult%20%3D%20%7B%20count%3A%20rows.length%2C%20newCount%2C%20rows%3A%20rows.map%28r%20%3D%3E%20%60%24%7Br.isNew%20%3F%20%22NEW%20%22%20%3A%20%22%22%7D%24%7Br.title%7D%20%7C%20%24%7Bfmt%28r.posted%29%7D%20%7C%20%24%7Br.status%7D%60%29%20%7D%3B%0A%20%20%7D%20catch%20%28err%29%20%7B%0A%20%20%20%20show%28%60%3Cp%3ECouldn%27t%20finish%20the%20check%3A%20%24%7Besc%28err.message%29%7D%3C%2Fp%3E%60%29%3B%0A%20%20%7D%0A%7D%29%28%29%3B">Tesla check</a></li>
+ <li>Open <a href="https://www.tesla.com/careers/search/">tesla.com/careers</a> and click <b>Tesla check</b>.</li>
+</ol>
+<p>A panel lists Tesla internships that match your <code>config.json</code> watches and aren't open on Simplify, with estimated posting dates. <b>NEW</b> marks roles this browser hasn't shown you before.</p>
+<h2>If the bookmark does nothing</h2>
+<p class="muted">Some browser settings block bookmarks that run code. Open the console on tesla.com instead (Chrome: <b>View → Developer → JavaScript Console</b>), paste this, and press Enter:</p>
+<textarea readonly onclick="this.select()">(async () =&gt; {
+  const REPO_CONFIG = &quot;https://raw.githubusercontent.com/arikurg/internship-watch/main/config.json&quot;;
+  const SIMPLIFY = &quot;https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json&quot;;
+  const SEEN_KEY = &quot;internship-watch-seen&quot;;
+  const STATES = [&quot;Alabama&quot;, &quot;Alaska&quot;, &quot;Arizona&quot;, &quot;Arkansas&quot;, &quot;California&quot;, &quot;Colorado&quot;, &quot;Connecticut&quot;, &quot;Delaware&quot;,
+    &quot;Florida&quot;, &quot;Georgia&quot;, &quot;Hawaii&quot;, &quot;Idaho&quot;, &quot;Illinois&quot;, &quot;Indiana&quot;, &quot;Iowa&quot;, &quot;Kansas&quot;, &quot;Kentucky&quot;, &quot;Louisiana&quot;,
+    &quot;Maine&quot;, &quot;Maryland&quot;, &quot;Massachusetts&quot;, &quot;Michigan&quot;, &quot;Minnesota&quot;, &quot;Mississippi&quot;, &quot;Missouri&quot;, &quot;Montana&quot;,
+    &quot;Nebraska&quot;, &quot;Nevada&quot;, &quot;New Hampshire&quot;, &quot;New Jersey&quot;, &quot;New Mexico&quot;, &quot;New York&quot;, &quot;North Carolina&quot;,
+    &quot;North Dakota&quot;, &quot;Ohio&quot;, &quot;Oklahoma&quot;, &quot;Oregon&quot;, &quot;Pennsylvania&quot;, &quot;Rhode Island&quot;, &quot;South Carolina&quot;,
+    &quot;South Dakota&quot;, &quot;Tennessee&quot;, &quot;Texas&quot;, &quot;Utah&quot;, &quot;Vermont&quot;, &quot;Virginia&quot;, &quot;Washington&quot;, &quot;West Virginia&quot;,
+    &quot;Wisconsin&quot;, &quot;Wyoming&quot;, &quot;District of Columbia&quot;, &quot;Puerto Rico&quot;];
+
+  const panel = document.getElementById(&quot;iw-panel&quot;) || document.createElement(&quot;div&quot;);
+  panel.id = &quot;iw-panel&quot;;
+  panel.style.cssText = &quot;position:fixed;top:16px;right:16px;width:460px;max-height:85vh;overflow:auto;z-index:2147483647;&quot; +
+    &quot;background:#fff;color:#111;font:14px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;&quot; +
+    &quot;border:1px solid #ddd;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.18);padding:14px 16px&quot;;
+  const esc = s =&gt; String(s).replace(/[&amp;&lt;&gt;&quot;]/g, c =&gt; ({ &quot;&amp;&quot;: &quot;&amp;amp;&quot;, &quot;&lt;&quot;: &quot;&amp;lt;&quot;, &quot;&gt;&quot;: &quot;&amp;gt;&quot;, &#x27;&quot;&#x27;: &quot;&amp;quot;&quot; }[c]));
+  const show = html =&gt; {
+    panel.innerHTML = &#x27;&lt;div style=&quot;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px&quot;&gt;&#x27; +
+      &#x27;&lt;b&gt;Tesla internships not on Simplify&lt;/b&gt;&lt;button id=&quot;iw-close&quot; style=&quot;border:0;background:none;font-size:18px;cursor:pointer&quot;&gt;×&lt;/button&gt;&lt;/div&gt;&#x27; + html;
+    document.body.appendChild(panel);
+    document.getElementById(&quot;iw-close&quot;).onclick = () =&gt; panel.remove();
+  };
+
+  if (!/(^|\.)tesla\.com$/.test(location.hostname)) {
+    show(&quot;&lt;p&gt;Open &lt;a href=&#x27;https://www.tesla.com/careers/search/&#x27;&gt;tesla.com/careers&lt;/a&gt; first, then click this again.&lt;/p&gt;&quot;);
+    return;
+  }
+  show(&quot;&lt;p&gt;Checking Tesla and Simplify…&lt;/p&gt;&quot;);
+
+  try {
+    const [tesla, simplify, config] = await Promise.all([
+      fetch(&quot;/cua-api/apps/careers/state&quot;).then(r =&gt; { if (!r.ok) throw new Error(&quot;Tesla returned HTTP &quot; + r.status); return r.json(); }),
+      fetch(SIMPLIFY).then(r =&gt; r.json()),
+      fetch(REPO_CONFIG, { cache: &quot;no-store&quot; }).then(r =&gt; r.json()),
+    ]);
+
+    const words = list =&gt; list &amp;&amp; list.length
+      ? new RegExp(&quot;\\b(?:&quot; + list.map(w =&gt; w.trim().replace(/[.*+?^${}()|[\]\\]/g, &quot;\\$&amp;&quot;)).join(&quot;|&quot;) + &quot;)\\b&quot;, &quot;i&quot;)
+      : null;
+    const watches = config.watches
+      .filter(w =&gt; w.companies === &quot;any&quot; || (w.companies || []).some(c =&gt; c.toLowerCase() === &quot;tesla&quot;))
+      .map(w =&gt; ({
+        name: w.name,
+        include: words(w.title_keywords),
+        exclude: words(w.title_exclude || config.title_exclude),
+      }));
+    const skipTerms = new Set((config.skip_terms || []).map(t =&gt; t.toLowerCase()));
+    const isUS = loc =&gt; STATES.some(s =&gt; loc === s || loc.endsWith(&quot;, &quot; + s));
+
+    const onSimplify = {};
+    const dated = [];
+    for (const x of simplify) {
+      if (x.company_name !== &quot;Tesla&quot;) continue;
+      const m = (x.url || &quot;&quot;).match(/tesla\.com\/careers\/search\/job\/(?:[^/?#]*-)?(\d{5,7})/);
+      if (!m) continue;
+      onSimplify[m[1]] = x;
+      if (x.date_posted) dated.push([+m[1], x.date_posted]);
+    }
+    dated.sort((a, b) =&gt; a[0] - b[0]);
+    const estimate = id =&gt; {
+      if (!dated.length || id &gt; dated[dated.length - 1][0]) return null;
+      let i = dated.findIndex(p =&gt; p[0] &gt;= id);
+      const near = dated.slice(Math.max(0, i - 3), i + 3).map(p =&gt; p[1]).sort((a, b) =&gt; a - b);
+      const later = Math.min(...dated.slice(i).map(p =&gt; p[1]));
+      return Math.min(near[Math.floor(near.length / 2)], later);
+    };
+
+    const L = tesla.lookup;
+    const internTypes = new Set(Object.entries(L.types).filter(([, v]) =&gt; /intern/i.test(v)).map(([k]) =&gt; k));
+    const groups = {};
+    for (const x of tesla.listings) {
+      if (!internTypes.has(String(x.y)) || !x.t) continue;
+      const title = x.t.replace(/\s+/g, &quot; &quot;).trim();
+      (groups[title] = groups[title] || []).push(x);
+    }
+
+    const seen = new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || &quot;[]&quot;));
+    const rows = [];
+    for (const [title, xs] of Object.entries(groups)) {
+      const ids = xs.map(x =&gt; String(x.id));
+      const known = ids.map(i =&gt; onSimplify[i]).filter(Boolean);
+      if (known.some(k =&gt; k.active)) continue;
+      const locs = [...new Set(xs.map(x =&gt; L.locations[x.l]).filter(Boolean))];
+      if (config.us_only &amp;&amp; locs.length &amp;&amp; !locs.some(isUS)) continue;
+      const term = (title.match(/\(([^()]*20\d\d[^()]*)\)\s*$/) || [])[1] || &quot;&quot;;
+      const terms = term.replace(/([A-Za-z])(20\d\d)/g, &quot;$1 $2&quot;).split(&quot;/&quot;).map(s =&gt; s.trim()).filter(Boolean);
+      const year = (term.match(/20\d\d/g) || []).pop();
+      const full = terms.map(s =&gt; /20\d\d/.test(s) ? s : s + &quot; &quot; + year).map(s =&gt; s.toLowerCase());
+      if (skipTerms.size &amp;&amp; full.length &amp;&amp; full.every(t =&gt; skipTerms.has(t))) continue;
+      const dept = L.departments[xs[0].dp] || &quot;&quot;;
+      const watch = watches.find(w =&gt;
+        !(w.exclude &amp;&amp; w.exclude.test(title)) &amp;&amp;
+        (w.include &amp;&amp; w.include.test(title)));
+      if (!watch) continue;
+      const first = ids.map(Number).sort((a, b) =&gt; a - b)[0];
+      rows.push({
+        id: String(first), title: title.replace(/^Internship,\s*/, &quot;&quot;), locs, dept, watch: watch.name,
+        posted: estimate(first), isNew: !ids.some(i =&gt; seen.has(i)), ids,
+        status: known.length ? &quot;Simplify shows it closed&quot; : &quot;Not on Simplify&quot;,
+      });
+    }
+    rows.sort((a, b) =&gt; (b.isNew - a.isNew) || ((b.posted || 9e12) - (a.posted || 9e12)));
+
+    const fmt = ts =&gt; ts ? &quot;posted about &quot; + new Date(ts * 1000).toLocaleDateString(undefined, { month: &quot;short&quot;, day: &quot;numeric&quot; }) : &quot;newer than anything on Simplify&quot;;
+    const newCount = rows.filter(r =&gt; r.isNew).length;
+    show(`&lt;p style=&quot;margin:0 0 10px;color:#555&quot;&gt;${rows.length} matching role${rows.length === 1 ? &quot;&quot; : &quot;s&quot;}` +
+      `${newCount ? `, &lt;b&gt;${newCount} new&lt;/b&gt; since your last check` : &quot;, none new since your last check&quot;}.&lt;/p&gt;` +
+      rows.map(r =&gt; `&lt;div style=&quot;padding:9px 0;border-top:1px solid #eee&quot;&gt;` +
+        (r.isNew ? &#x27;&lt;span style=&quot;background:#dcfce7;color:#166534;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;margin-right:6px&quot;&gt;NEW&lt;/span&gt;&#x27; : &quot;&quot;) +
+        `&lt;a href=&quot;/careers/search/job/${r.id}&quot; target=&quot;_blank&quot; style=&quot;color:#1a56db;font-weight:600;text-decoration:none&quot;&gt;${esc(r.title)}&lt;/a&gt;` +
+        `&lt;div style=&quot;color:#444;font-size:13px&quot;&gt;${esc(r.locs.join(&quot;, &quot;) || &quot;Location not listed&quot;)}&lt;/div&gt;` +
+        `&lt;div style=&quot;color:#888;font-size:12px&quot;&gt;${esc(fmt(r.posted))} · ${esc(r.status)} · ${esc(r.watch)}&lt;/div&gt;&lt;/div&gt;`).join(&quot;&quot;) +
+      &#x27;&lt;p style=&quot;color:#999;font-size:11px;margin:10px 0 0&quot;&gt;Filters come from your internship-watch config.json.&lt;/p&gt;&#x27;);
+
+    rows.forEach(r =&gt; r.ids.forEach(i =&gt; seen.add(i)));
+    localStorage.setItem(SEEN_KEY, JSON.stringify([...seen]));
+    window.__iwResult = { count: rows.length, newCount, rows: rows.map(r =&gt; `${r.isNew ? &quot;NEW &quot; : &quot;&quot;}${r.title} | ${fmt(r.posted)} | ${r.status}`) };
+  } catch (err) {
+    show(`&lt;p&gt;Couldn&#x27;t finish the check: ${esc(err.message)}&lt;/p&gt;`);
+  }
+})();</textarea>
+</body></html>

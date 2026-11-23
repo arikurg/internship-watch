@@ -2,11 +2,11 @@
 
 A GitHub Action that emails you when a new internship matches one of your watches:
 
-- **Tesla software**: software, firmware, ML and infrastructure roles at Tesla
+- **Tesla software**: software, firmware, ML and controls roles at Tesla (plus a one-click browser check for Tesla roles Simplify misses)
 - **AMD & NVIDIA**: software and AI/ML roles, plus hardware roles only when they're verification
 - **Embedded & firmware**: embedded, firmware, RTOS and flight software roles at any company, summer and off-season
 
-It reads the [SimplifyJobs internship feed](https://github.com/SimplifyJobs/Summer2027-Internships), which Simplify refreshes about every 30 minutes and which covers summer and off-season terms. The workflow checks four times an hour, compares matching open roles against `state/seen.json`, and emails you anything it hasn't seen. It also reads Tesla's own careers feed, which catches the many Tesla roles Simplify never lists (see [Direct feeds](#direct-feeds-tesla)).
+It reads the [SimplifyJobs internship feed](https://github.com/SimplifyJobs/Summer2027-Internships), which Simplify refreshes about every 30 minutes and which covers summer and off-season terms. The workflow checks four times an hour, compares matching open roles against `state/seen.json`, and emails you anything it hasn't seen. For Tesla roles Simplify never lists, there's a one-click check you run in your browser (see [Tesla roles Simplify misses](#tesla-roles-simplify-misses)).
 
 ## Setup (about 10 minutes)
 
@@ -59,42 +59,20 @@ Preview what your filter matches without sending anything:
 python3 watch.py --dry-run --test-email
 ```
 
-## Direct feeds (Tesla)
+## Tesla roles Simplify misses
 
-Simplify misses a lot. On Nov 21, 2026, about half of Tesla's open US engineering internships weren't on it. With `direct_sources.tesla.enabled` set to `true` in `config.json`, every run also reads Tesla's own listings. Tesla roles that Simplify doesn't list as open go through the same watches and filters, and the email marks them:
+Simplify misses a lot of Tesla. On Nov 21, 2026, about half of Tesla's open US engineering internships weren't on it. Tesla's careers site has them all, but it only serves real browsers: scripts get HTTP 403 whether they run on GitHub's servers or a home laptop. So the watcher doesn't fetch Tesla. You check it in your own browser with one click instead.
 
-- **Not on Simplify**: Simplify has never listed it.
-- **Simplify shows it closed**: Simplify marked it closed, but Tesla still lists it.
+**Set up the Tesla check:** open `tesla_bookmarklet.html` from this repo in your browser and drag the **Tesla check** button onto your bookmarks bar. Then, on [tesla.com/careers](https://www.tesla.com/careers/search/), click the bookmark. A panel lists Tesla internships that:
 
-Marked roles sort to the top of their section, and the subject line counts them.
+- match the Tesla and any-company watches in your `config.json` (title keywords, `title_exclude`, `us_only`, `skip_terms`), and
+- Simplify doesn't list as open (marked "Not on Simplify" or "Simplify shows it closed").
 
-### Your laptop fetches Tesla's listings
+**NEW** marks roles that browser hasn't shown you before. Tesla publishes no posting dates, so the panel estimates them from job IDs, which go up over time. Against 240 Tesla roles with known dates, 80% of estimates landed within 2 days.
 
-Tesla refuses requests from GitHub's servers (HTTP 403) but answers home and campus connections. So `fetch_tesla.py` runs on your laptop every 15 minutes, downloads Tesla's job feed, keeps the internships, and pushes them as `tesla.json` to a `tesla-feed` branch in this repo. The GitHub Action reads that file (`direct_sources.tesla.feed_url`). The branch always holds a single commit that gets replaced, so it never grows, and pushing it doesn't start a workflow.
+The check reads your filters from `config.json` on GitHub, so push config changes before relying on them. If your browser won't run the bookmark, paste `tesla_check.js` into the console on tesla.com.
 
-Setup, from the repo folder on your laptop:
-
-1. `python3 fetch_tesla.py --check` should print "Tesla accepts requests from this computer." If it prints HTTP 403, Tesla is blocking your network too, and this approach won't work from there.
-2. `python3 fetch_tesla.py` publishes once. A `tesla-feed` branch should appear on GitHub.
-3. `python3 fetch_tesla.py --install` runs it in the background.
-   - **macOS:** installs a launchd job that runs every 15 minutes while the Mac is awake, and right after it wakes. The log is at `~/Library/Logs/internship-watch-tesla.log`.
-   - **Linux or Windows:** prints the cron line or `schtasks` command to add.
-
-`python3 fetch_tesla.py --uninstall` removes the background job.
-
-If your laptop sleeps or goes offline, the Action keeps using the last feed for up to 24 hours (`max_age_hours`). After that, you get one email saying the feed is stale, and another once your laptop publishes again. Simplify alerts keep working the whole time.
-
-On macOS, if the log shows "Operation not permitted," the repo is probably in Documents, Desktop or Downloads, which background jobs can't read without extra permission. Move the repo somewhere like `~/code` and run `--install` again.
-
-Details:
-
-- Tesla publishes no posting dates, so the email estimates one from the job ID. Tesla's IDs go up over time, and against 240 Tesla roles with known dates, 80% of estimates landed within 2 days. A role with a newer ID than anything Simplify has shows as "found on the company's site".
-- Tesla posts one listing per location. The watcher merges listings with the same title into one entry.
-- If Simplify later adds a role you already got from Tesla's site, you won't get a second email.
-- If the watcher can't get Tesla's listings for over an hour, you get one email saying why, and another when they come back.
-- To turn it off, set `"enabled": false` and run `python3 fetch_tesla.py --uninstall`.
-
-Test it locally against a saved copy of Tesla's feed with `python3 watch.py --dry-run --tesla-file tesla.json`.
+`watch.py` still has code for reading Tesla directly (`direct_sources.tesla` in `config.json`), switched off. It works again if Tesla ever opens its feed to scripts.
 
 ## How fast are the alerts?
 

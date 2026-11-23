@@ -92,16 +92,13 @@ def load_listings(args, config) -> list[dict]:
 TESLA_FEED_URL = "https://www.tesla.com/cua-api/apps/careers/state"
 TESLA_JOB_URL = "https://www.tesla.com/careers/search/job/{id}"
 TESLA_JOB_ID = re.compile(r"tesla\.com/careers/search/job/(?:[^/?#]*-)?(\d{5,7})(?:[/?#]|$)")
-# Tesla's site turns away requests that don't look like a browser.
-BROWSER_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.tesla.com/careers/search/",
+# As of Nov 2026 Tesla answers scripts with HTTP 403 from any network, so this
+# source ships disabled; use tesla_check.js in your browser instead. The code
+# stays so it works again if Tesla ever opens the feed to scripts.
+FEED_HEADERS = {
+    "User-Agent": "internship-watch (https://github.com/arikurg/internship-watch)",
+    "Accept": "application/json",
 }
-# Tesla files roles under departments, not Simplify-style categories.
-TESLA_CATEGORY = {"Vehicle Software": "Software"}
 # If a direct source keeps failing for this long, send one email about it.
 SOURCE_ALERT_AFTER = timedelta(hours=1)
 
@@ -120,7 +117,7 @@ def fetch_tesla_feed(attempts: int = 2) -> dict:
     last: SourceError | None = None
     for attempt in range(1, attempts + 1):
         try:
-            req = urllib.request.Request(TESLA_FEED_URL, headers=BROWSER_HEADERS)
+            req = urllib.request.Request(TESLA_FEED_URL, headers=FEED_HEADERS)
             with urllib.request.urlopen(req, timeout=60) as resp:
                 data = json.loads(resp.read())
             if not isinstance(data, dict) or "listings" not in data or "lookup" not in data:
@@ -247,7 +244,7 @@ def load_tesla(simplify: list[dict], feed_file: str | None = None, feed_url: str
             "locations": list(dict.fromkeys(
                 locations[str(r.get("l"))] for r in raws if str(r.get("l")) in locations)),
             "terms": parse_terms(title),
-            "category": TESLA_CATEGORY.get(department, department),
+            "category": department,  # Tesla departments, not Simplify categories
             "degrees": [],
             "active": True,
             "is_visible": True,
@@ -267,6 +264,7 @@ def run_direct_sources(args, config, simplify, sources_state, now) -> tuple[list
     notices: list[tuple[str, str]] = []
     cfg = config.get("direct_sources", {}).get("tesla", {})
     if not cfg.get("enabled"):
+        sources_state.pop("tesla", None)  # forget any old failure record
         return extra, notices
 
     health = sources_state.setdefault("tesla", {})

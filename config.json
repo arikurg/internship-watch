@@ -2,9 +2,7 @@
   "feed_url": "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json",
   "direct_sources": {
     "tesla": {
-      "enabled": true,
-      "feed_url": "https://raw.githubusercontent.com/arikurg/internship-watch/tesla-feed/tesla.json",
-      "max_age_hours": 24
+      "enabled": false
     }
   },
   "watches": [
@@ -29,7 +27,6 @@
         "back end",
         "frontend",
         "front end",
-        "infrastructure",
         "compiler",
         "distributed systems",
         "machine learning",
@@ -45,6 +42,11 @@
         "site reliability",
         "controls engineer",
         "network engineer"
+      ],
+      "title_exclude": [
+        "phd",
+        "ph.d",
+        "mechanical"
       ]
     },
     {
