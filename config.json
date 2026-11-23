@@ -3,6 +3,24 @@
   "direct_sources": {
     "tesla": {
       "enabled": false
+    },
+    "greenhouse": {
+      "enabled": true,
+      "boards": {
+        "Neuralink": "neuralink",
+        "Astranis": "astranis",
+        "Anduril": "andurilindustries",
+        "Varda Space": "vardaspace",
+        "Zipline": "flyzipline",
+        "Figure": "figureai",
+        "Nuro": "nuro",
+        "Cloudflare": "cloudflare",
+        "SpaceX": "spacex",
+        "Etched": "etchedai",
+        "Kodiak Robotics": "kodiak",
+        "Tenstorrent": "tenstorrentuniversity",
+        "Lightmatter": "lightmatter"
+      }
     }
   },
   "watches": [
@@ -50,11 +68,13 @@
       ]
     },
     {
-      "name": "AMD & NVIDIA: software + hardware verification",
+      "name": "Chip companies: software + hardware verification",
       "companies": [
         "AMD",
         "NVIDIA",
-        "Marvell"
+        "Marvell",
+        "Tenstorrent",
+        "Lightmatter"
       ],
       "categories": [
         "Software",
@@ -62,7 +82,11 @@
         "AI/ML/Data"
       ],
       "title_keywords": [
-        "verification"
+        "verification",
+        "software",
+        "compiler",
+        "test automation",
+        "platform"
       ]
     },
     {
@@ -86,6 +110,77 @@
         "research scientist",
         "research intern",
         "apprentice"
+      ]
+    },
+    {
+      "name": "Intel & Neuralink software",
+      "companies": [
+        "Intel",
+        "Neuralink"
+      ],
+      "categories": [
+        "Software",
+        "Software Engineering"
+      ],
+      "title_keywords": [
+        "software",
+        "developer",
+        "compiler"
+      ],
+      "title_exclude": [
+        "phd",
+        "ph.d",
+        "research scientist"
+      ]
+    },
+    {
+      "name": "Space, defense, robotics & infra",
+      "companies": [
+        "Astranis",
+        "Anduril",
+        "Varda Space",
+        "Zipline",
+        "Figure",
+        "Nuro",
+        "Cloudflare",
+        "SpaceX",
+        "Etched",
+        "Kodiak Robotics"
+      ],
+      "categories": [
+        "Software",
+        "Software Engineering"
+      ],
+      "title_keywords": [
+        "software",
+        "developer",
+        "firmware",
+        "embedded",
+        "site reliability",
+        "devops",
+        "developer productivity",
+        "infrastructure",
+        "platform",
+        "avionics",
+        "controls",
+        "gnc",
+        "guidance",
+        "flight software",
+        "autonomy",
+        "machine learning",
+        "compiler",
+        "test automation",
+        "systems validation"
+      ],
+      "title_exclude": [
+        "phd",
+        "ph.d",
+        "mechanical",
+        "marketing",
+        "finance",
+        "recruiting",
+        "business operations",
+        "sales"
       ]
     },
     {

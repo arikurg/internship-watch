@@ -3,7 +3,9 @@
 A GitHub Action that emails you when a new internship matches one of your watches:
 
 - **Tesla software**: software, firmware, ML and controls roles at Tesla (including Tesla roles Simplify misses, via the Chrome extension)
-- **AMD & NVIDIA**: software and AI/ML roles, plus hardware roles only when they're verification
+- **Chip companies** (AMD, NVIDIA, Marvell, Tenstorrent, Lightmatter): software and AI/ML roles, plus hardware roles when the title says verification, compiler, test automation or platform
+- **Intel & Neuralink**: software roles
+- **Space, defense, robotics & infra**: software, firmware, flight software, avionics, GNC, controls, SRE and autonomy roles at Astranis, Anduril, Varda, Zipline, Figure, Nuro, Cloudflare, SpaceX, Etched and Kodiak
 - **Embedded & firmware**: embedded, firmware, RTOS and flight software roles at any company, summer and off-season
 
 It reads the [SimplifyJobs internship feed](https://github.com/SimplifyJobs/Summer2027-Internships), which Simplify refreshes about every 30 minutes and which covers summer and off-season terms. The workflow checks four times an hour, compares matching open roles against `state/seen.json`, and emails you anything it hasn't seen. Tesla roles Simplify never lists come in through a small Chrome extension (see [Tesla roles Simplify misses](#tesla-roles-simplify-misses)).
@@ -51,7 +53,7 @@ Top-level settings apply to every watch:
 - `skip_terms`: drop a role when every term it lists is here. The default skips 2026 terms that have already started, which Simplify sometimes leaves marked open. Roles with no term listed always pass.
 - `feed_url`: when Simplify starts its Summer 2028 repo, point this at the new repo's `.github/scripts/listings.json`.
 
-Broadening a filter makes older open roles count as new, so expect one bigger email after the change. Two easy additions if you want them: `"validation"` in the AMD & NVIDIA keywords for post-silicon validation roles, and `"fpga"` in the embedded watch for FPGA roles.
+Broadening a filter makes older open roles count as new, so expect one bigger email after the change. Two easy additions if you want them: `"validation"` in the chip companies keywords for post-silicon validation roles, and `"fpga"` in the embedded watch for FPGA roles.
 
 Preview what your filter matches without sending anything:
 
@@ -59,13 +61,36 @@ Preview what your filter matches without sending anything:
 python3 watch.py --dry-run --test-email
 ```
 
+## Companies read straight from Greenhouse
+
+Many companies post jobs on Greenhouse, whose job board feed is public and built for programs to read, so the watcher reads those boards directly. Simplify misses a lot of them. On Nov 23, 2026, none of Neuralink's 5 software intern roles were on Simplify, and Varda, Astranis, Anduril and Zipline each had several internships Simplify didn't list.
+
+The boards live in `config.json` under `direct_sources.greenhouse.boards`, as company name → board name:
+
+```json
+"greenhouse": {
+  "enabled": true,
+  "boards": { "Neuralink": "neuralink", "Astranis": "astranis", "SpaceX": "spacex" }
+}
+```
+
+- **Board name:** the part after `greenhouse.io/` in the company's job links (`job-boards.greenhouse.io/astranis/jobs/…` → `astranis`). You can test one in your browser: `https://boards-api.greenhouse.io/v1/boards/astranis/jobs` should show a list of jobs.
+- **Company name:** spell it the way Simplify does (for example "Varda Space", "Kodiak Robotics"), and add it to a watch's `companies` so its roles get filtered. The "Space, defense, robotics & infra" watch covers most of these boards.
+- Only internships and co-ops are read. Roles Simplify lists as open are skipped (Simplify's copy covers them); the rest are marked **Not on Simplify** or **Simplify shows it closed**, with Greenhouse's real posting date.
+- For US-only filtering, Greenhouse roles are dropped only when every location is clearly outside the US, since many boards list bare city names like "San Francisco".
+- If a board stops working (renamed, or the company left Greenhouse), you get one email naming it; the other boards keep working.
+
+Tenstorrent posts student roles on a separate board, `tenstorrentuniversity`; its main `tenstorrent` board has no internships. Lightmatter's board mostly holds hardware internships, so the chip watch keeps only the software, platform and test automation ones.
+
+Some companies keep evergreen intern postings open for a year or more (Neuralink's date to 2024 and 2025), so expect old posting dates on those.
+
 ## Tesla roles Simplify misses
 
 Simplify misses a lot of Tesla. On Nov 21, 2026, about half of Tesla's open US engineering internships weren't on it. Tesla's careers site has them all, but it only serves real browsers: scripts get HTTP 403 whether they run on GitHub's servers or a home laptop. So Tesla gets read from inside your Chrome, two ways.
 
 ### Email alerts: the Chrome extension
 
-`tesla-extension/` is a small Chrome extension. Every 3 hours while you're using your computer, it reads Tesla's internship list with one background request (about 300 KB) and publishes it to a private GitHub Gist. It never opens tabs. The watcher reads the Gist, runs Tesla roles through your watches, and emails new ones marked **Not on Simplify** or **Simplify shows it closed**, with no duplicates if Simplify adds them later.
+`tesla-extension/` is a small Chrome extension. Every 3 hours while you're using your computer, it reads Tesla's internship list (about 300 KB) and publishes it to a private GitHub Gist. The watcher reads the Gist, runs Tesla roles through your watches, and emails new ones marked **Not on Simplify** or **Simplify shows it closed**, with no duplicates if Simplify adds them later.
 
 Setup (about 5 minutes):
 
@@ -79,7 +104,10 @@ The next watcher run emails every matching Tesla role that isn't open on Simplif
 Good to know:
 
 - It runs while Chrome is running and you're using the computer. A check that comes due while you're away or the screen is locked waits until you're back. Change the interval (1, 3 or 6 hours) on the extension's options page.
-- Tesla served its job list to Chrome without cookies in testing, so the background request should keep working. If Tesla ever refuses it, the extension doesn't open anything: the next time you visit tesla.com/careers yourself, it reads the list from that page.
+- It first tries a background request that carries your Tesla cookies. If Tesla refuses that (it refused the cookie-less version with HTTP 403), it does what you picked on the options page:
+  - **Wait for a visit** (default): nothing opens. The next time you open tesla.com/careers yourself, it reads the list from that page.
+  - **Minimized window**: it loads Tesla's careers page in a minimized window for a few seconds, reads the list, and closes the window. Fully automatic.
+- Opening tesla.com/careers yourself also finishes setup if the first check is refused: the extension creates your Gist from that page.
 - When nothing changed, it skips publishing, and it republishes at least every 12 hours so the watcher knows it's alive. If the Gist goes 48 hours without an update (`max_age_hours`), you get one email about it, and Simplify alerts keep working.
 - Click the extension's icon to see the last check. A red **!** means the last check failed.
 - Tesla publishes no posting dates, so emails estimate them from job IDs, which go up over time. Against 240 Tesla roles with known dates, 80% of estimates landed within 2 days.

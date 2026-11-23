@@ -2,8 +2,8 @@
 """Email me when a new internship that matches config.json shows up.
 
 Reads Simplify's internship feed, plus companies' own job sites listed under
-direct_sources in config.json (Tesla for now), so roles Simplify hasn't picked
-up still reach you. Runs on a schedule in GitHub Actions. Standard library
+direct_sources in config.json (Greenhouse boards, and Tesla through the Chrome
+extension's Gist), so roles Simplify hasn't picked up still reach you. Runs on a schedule in GitHub Actions. Standard library
 only, so the workflow needs no pip install step.
 
 Usage:
@@ -12,6 +12,7 @@ Usage:
   python3 watch.py --test-email    email every matching open role; state untouched
   python3 watch.py --feed-file F   read Simplify listings from a local file (for testing)
   python3 watch.py --tesla-file F  read Tesla's feed from a local file (for testing)
+  python3 watch.py --greenhouse-file F  read Greenhouse boards from a local file (for testing)
 
 Email settings come from environment variables:
   SMTP_USER, SMTP_PASSWORD   login (for Gmail: your address and an app password)
@@ -257,46 +258,200 @@ def load_tesla(simplify: list[dict], feed_file: str | None = None, feed_url: str
     return out
 
 
+# --------------------------------------------------------------------------- #
+# Direct source: companies' Greenhouse job boards
+# --------------------------------------------------------------------------- #
+
+# Greenhouse's job board API is public and meant for programs, so GitHub's
+# servers can read it directly. Tests point this at a local server.
+GREENHOUSE_API = os.environ.get("GREENHOUSE_API_BASE", "https://boards-api.greenhouse.io/v1/boards")
+INTERN_TITLE = re.compile(r"\bintern(?:ship)?s?\b|\bco-?op\b", re.IGNORECASE)
+SEASON_TERM = re.compile(
+    r"\b(spring|summer|fall|autumn|winter)(?:\s*/\s*(spring|summer|fall|autumn|winter))?\s*(20\d\d)\b", re.IGNORECASE)
+# Locations that are clearly outside the US. Greenhouse boards often list bare
+# US city names ("San Francisco", "In-Office"), so for them a role only counts
+# as non-US when every location matches this. Cities that share a name with a
+# US city (London, Dublin, Paris, Berlin, Melbourne, Vancouver) are left out.
+NON_US = re.compile(
+    r"\b(?:united kingdom|england|scotland|wales|ireland|u\.?k\.?|canada|ontario|quebec|british columbia|alberta|"
+    r"germany|france|netherlands|switzerland|sweden|denmark|norway|finland|poland|romania|czech|hungary|spain|"
+    r"italy|israel|india|china|japan|korea|taiwan|singapore|australia|new zealand|mexico|brazil|philippines|"
+    r"vietnam|united arab emirates|uae|toronto|montreal|sydney|tokyo|seoul|taipei|bangalore|bengaluru|"
+    r"hyderabad|munich|tel aviv)\b", re.IGNORECASE)
+
+
+def terms_in_title(title: str) -> list[str]:
+    """Season terms anywhere in a title: 'Spring 2027 Software…', '…Internship - Spring 2027',
+    '(Winter/Spring 2027)', '[Winter 2027]'."""
+    terms = []
+    for m in SEASON_TERM.finditer(title):
+        for season in (m.group(1), m.group(2)):
+            if season:
+                terms.append(f"{season.capitalize()} {m.group(3)}")
+    return terms
+
+
+def looks_non_us(location: str) -> bool:
+    return bool(NON_US.search(location)) and not is_us_location(location)
+
+
+def fetch_greenhouse_board(token: str) -> list[dict]:
+    try:
+        req = urllib.request.Request(f"{GREENHOUSE_API}/{token}/jobs", headers=FEED_HEADERS)
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        hint = " (board not found: the company may have renamed it or left Greenhouse)" if exc.code == 404 else ""
+        raise SourceError(f"{token}: HTTP {exc.code}{hint}")
+    except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
+        raise SourceError(f"{token}: {exc}")
+    jobs = data.get("jobs") if isinstance(data, dict) else None
+    if not isinstance(jobs, list):
+        raise SourceError(f"{token}: unexpected response")
+    return jobs
+
+
+def load_greenhouse(simplify: list[dict], boards: dict[str, str],
+                    boards_file: str | None = None) -> tuple[list[dict], list[str]]:
+    """Internships on the listed Greenhouse boards that Simplify doesn't list as
+    open, in Simplify's format. Returns (listings, errors for boards that failed)."""
+    tracked = {name.lower() for name in boards}
+    known: dict[str, dict] = {}  # Greenhouse job ID -> Simplify listing
+    for listing in simplify:
+        if listing.get("company_name", "").lower() in tracked:
+            ids = re.findall(r"\d{6,}", listing.get("url", ""))
+            for job_id in ids:
+                known[job_id] = listing
+            # Lets a role already emailed from Simplify match its Greenhouse copy.
+            listing.setdefault("_aliases", []).extend(f"gh:{i}" for i in ids)
+
+    saved = json.loads(Path(boards_file).read_text()) if boards_file else None
+    out: list[dict] = []
+    errors: list[str] = []
+    for company, token in boards.items():
+        try:
+            if saved is not None:
+                if token not in saved:
+                    raise SourceError(f"{token}: not in the test file")
+                jobs = saved[token]
+            else:
+                jobs = fetch_greenhouse_board(token)
+        except SourceError as exc:
+            errors.append(str(exc))
+            continue
+
+        # Companies often post one listing per location; merge identical titles.
+        groups: dict[str, list[dict]] = {}
+        for job in jobs:
+            title = " ".join(str(job.get("title", "")).split())
+            if job.get("id") and INTERN_TITLE.search(title):
+                groups.setdefault(title, []).append(job)
+
+        for title, group in groups.items():
+            ids = [str(j["id"]) for j in group]
+            on_simplify = [known[i] for i in ids if i in known]
+            if any(l.get("active") for l in on_simplify):
+                continue  # Simplify lists it as open, so its listing covers this role
+            first = min(group, key=lambda j: j.get("first_published") or j.get("updated_at") or "")
+            stamp = first.get("first_published") or first.get("updated_at")
+            try:
+                posted = datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp() if stamp else time.time()
+            except ValueError:
+                posted = time.time()
+            locations = []
+            for j in group:
+                for part in re.split(r"[;|]", (j.get("location") or {}).get("name") or ""):
+                    if part.strip() and part.strip() not in locations:
+                        locations.append(part.strip())
+            out.append({
+                "id": f"gh:{ids[0]}",
+                "company_name": company,
+                "title": title,
+                "url": first.get("absolute_url") or f"https://job-boards.greenhouse.io/{token}/jobs/{ids[0]}",
+                "locations": locations,
+                "terms": terms_in_title(title),
+                "category": "",
+                "degrees": [],
+                "active": True,
+                "is_visible": True,
+                "date_posted": posted,
+                "_date_known": True,
+                "_lenient_location": True,
+                "_source": "greenhouse",
+                "_simplify": "closed" if on_simplify else "missing",
+                "_aliases": [f"gh:{i}" for i in ids] + [l["id"] for l in on_simplify],
+            })
+    return out, errors
+
+
+# --------------------------------------------------------------------------- #
+# Running the direct sources
+# --------------------------------------------------------------------------- #
+
+def source_health(name: str, label: str, sources_state: dict, now: datetime,
+                  error: str | None) -> tuple[str, str] | None:
+    """Track one source's failures so each outage is emailed once, plus once
+    more when it recovers. Returns a notice to send, if any."""
+    health = sources_state.setdefault(name, {})
+    if error is None:
+        notice = None
+        if health.get("notified"):
+            notice = (f"{label} working again",
+                      f"The watcher can read the {label} again, so alerts from it are back on.")
+        sources_state.pop(name, None)
+        return notice
+    notice = None
+    if not health.get("failing_since"):
+        health["failing_since"] = now.isoformat(timespec="seconds")
+    elif not health.get("notified") and now - datetime.fromisoformat(health["failing_since"]) > SOURCE_ALERT_AFTER:
+        notice = (f"{label} not working",
+                  f"The watcher hasn't been able to read the {label} since {health['failing_since']} UTC.\n\n"
+                  f"Last error: {error}\n\n"
+                  "Simplify alerts still work. You'll get one more email when it works again.")
+        health["notified"] = True
+    health["last_error"] = error[:300]
+    return notice
+
+
 def run_direct_sources(args, config, simplify, sources_state, now) -> tuple[list[dict], list[tuple[str, str]]]:
-    """Fetch direct sources. Returns extra listings and notices to email.
-    Updates sources_state in place so a failing source is reported once."""
+    """Fetch the direct sources in config.json. Returns extra listings and notices to email."""
     extra: list[dict] = []
     notices: list[tuple[str, str]] = []
-    cfg = config.get("direct_sources", {}).get("tesla", {})
+    direct = config.get("direct_sources", {})
+
+    cfg = direct.get("tesla", {})
     if not cfg.get("enabled"):
         sources_state.pop("tesla", None)  # forget any old failure record
-        return extra, notices
-
-    health = sources_state.setdefault("tesla", {})
-    try:
-        tesla = load_tesla(simplify, args.tesla_file, cfg.get("feed_url"), cfg.get("max_age_hours", 24))
-    except (SourceError, OSError, ValueError, KeyError, TypeError) as exc:
-        print(f"tesla source failed: {exc}", file=sys.stderr)
-        if not health.get("failing_since"):
-            health["failing_since"] = now.isoformat(timespec="seconds")
-        elif not health.get("notified") and now - datetime.fromisoformat(health["failing_since"]) > SOURCE_ALERT_AFTER:
+    else:
+        error = None
+        try:
+            tesla = load_tesla(simplify, args.tesla_file, cfg.get("feed_url"), cfg.get("max_age_hours", 24))
+            print(f"tesla: {len(tesla)} internships that Simplify doesn't list as open")
+            extra += tesla
+        except (SourceError, OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"tesla source failed: {exc}", file=sys.stderr)
             hint = "" if cfg.get("feed_url") else (
-                " Tesla blocks scripts, so set feed_url to the Chrome extension's Gist (see the README)."
-            )
-            notices.append((
-                "Tesla job feed isn't working",
-                f"The watcher hasn't been able to get Tesla's listings since "
-                f"{health['failing_since']} UTC.\n\nLast error: {exc}{hint}\n\n"
-                "Simplify alerts still work. You'll get one more email when Tesla's listings come back.",
-            ))
-            health["notified"] = True
-        health["last_error"] = str(exc)[:200]
-        return extra, notices
+                " Tesla blocks scripts, so set feed_url to the Chrome extension's Gist (see the README).")
+            error = f"{exc}{hint}"
+        notice = source_health("tesla", "Tesla job feed", sources_state, now, error)
+        if notice:
+            notices.append(notice)
 
-    print(f"tesla: {len(tesla)} internships that Simplify doesn't list as open")
-    if health.get("notified"):
-        notices.append((
-            "Tesla job feed is working again",
-            "The watcher can read Tesla's careers site again, so alerts for Tesla roles "
-            "that aren't on Simplify are back on.",
-        ))
-    sources_state.pop("tesla", None)
-    return tesla, notices
+    cfg = direct.get("greenhouse", {})
+    if not cfg.get("enabled") or not cfg.get("boards"):
+        sources_state.pop("greenhouse", None)
+    else:
+        found, errors = load_greenhouse(simplify, cfg["boards"], args.greenhouse_file)
+        print(f"greenhouse: {len(found)} internships that Simplify doesn't list as open"
+              + (f" ({len(errors)} board(s) failed)" if errors else ""))
+        for error in errors:
+            print(f"greenhouse board failed: {error}", file=sys.stderr)
+        extra += found
+        notice = source_health("greenhouse", "Greenhouse job boards", sources_state, now,
+                               "; ".join(errors) if errors else None)
+        if notice:
+            notices.append(notice)
+    return extra, notices
 
 
 def aliases(listing: dict) -> set[str]:
@@ -373,9 +528,15 @@ class Watch:
         if self.companies is not None and listing.get("company_name", "").lower() not in self.companies:
             return False
         # A role passes if any of its locations is in the US (or it lists none).
+        # Greenhouse boards often use bare city names, so there a role is only
+        # dropped when every location is clearly outside the US.
         locations = listing.get("locations") or []
-        if self.us_only and locations and not any(is_us_location(l) for l in locations):
-            return False
+        if self.us_only and locations:
+            if listing.get("_lenient_location"):
+                if all(looks_non_us(l) for l in locations):
+                    return False
+            elif not any(is_us_location(l) for l in locations):
+                return False
         # Postings with no degree info pass; otherwise one listed degree must be yours.
         degrees = {d.lower() for d in listing.get("degrees") or []}
         if self.degrees and degrees and not degrees & self.degrees:
@@ -455,7 +616,10 @@ BADGES = {"missing": "Not on Simplify", "closed": "Simplify shows it closed"}
 def posting_fields(p: dict, tz, now: datetime) -> dict:
     posted = datetime.fromtimestamp(p.get("date_posted", 0), tz=timezone.utc)
     age = describe_age(posted, now)
-    if p.get("_source") and p.get("_date_estimated"):
+    if p.get("_source") and p.get("_date_known"):
+        stamp = posted.astimezone(tz).strftime("%b %d, %Y").replace(" 0", " ")
+        posted_text = f"Posted {stamp} ({age})"
+    elif p.get("_source") and p.get("_date_estimated"):
         posted_text = f"Posted about {posted.astimezone(tz).strftime('%b %d').replace(' 0', ' ')} ({age}, estimated from job ID)"
     elif p.get("_source"):
         posted_text = f"Found on the company's site {age}"
@@ -553,7 +717,9 @@ def build_email(postings: list[dict], config: dict, heading: str) -> tuple[str, 
           <div style="color:#333;margin-top:4px"><b>{escape(r['company'])}</b> &middot; {escape(r['locations'])} &middot; {escape(r['terms'])}</div>
           <div style="color:#777;font-size:13px;margin-top:2px">{escape(r['posted'])} &middot; {escape(r['category'])}</div>
         </td></tr>""")
-    footer = "Sources: SimplifyJobs internship feed" + (", Tesla careers site" if off_simplify else "")
+    source_names = {"tesla": "Tesla careers site", "greenhouse": "company Greenhouse boards"}
+    extra_sources = sorted({source_names[p["_source"]] for p in postings if p.get("_source") in source_names})
+    footer = "Sources: " + ", ".join(["SimplifyJobs internship feed"] + extra_sources)
     text_lines.append(footer)
     text = "\n".join(text_lines)
 
@@ -627,6 +793,7 @@ def main() -> int:
     parser.add_argument("--test-email", action="store_true")
     parser.add_argument("--feed-file")
     parser.add_argument("--tesla-file")
+    parser.add_argument("--greenhouse-file", help="read Greenhouse boards from a local file (for testing)")
     args = parser.parse_args()
     if os.environ.get("TEST_EMAIL") in {"1", "true"}:
         args.test_email = True
