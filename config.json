@@ -72,6 +72,7 @@
       "companies": [
         "AMD",
         "NVIDIA",
+        "Intel",
         "Marvell",
         "Tenstorrent",
         "Lightmatter"
@@ -90,10 +91,11 @@
       ]
     },
     {
-      "name": "Amazon & Meta software",
+      "name": "Amazon, Meta & Intuit software",
       "companies": [
         "Amazon",
-        "Meta"
+        "Meta",
+        "Intuit"
       ],
       "categories": [
         "Software",
@@ -109,13 +111,13 @@
         "ph.d",
         "research scientist",
         "research intern",
-        "apprentice"
+        "apprentice",
+        "marketing"
       ]
     },
     {
-      "name": "Intel & Neuralink software",
+      "name": "Neuralink software",
       "companies": [
-        "Intel",
         "Neuralink"
       ],
       "categories": [

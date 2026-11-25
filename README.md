@@ -3,8 +3,9 @@
 A GitHub Action that emails you when a new internship matches one of your watches:
 
 - **Tesla software**: software, firmware, ML and controls roles at Tesla (including Tesla roles Simplify misses, via the Chrome extension)
-- **Chip companies** (AMD, NVIDIA, Marvell, Tenstorrent, Lightmatter): software and AI/ML roles, plus hardware roles when the title says verification, compiler, test automation or platform
-- **Intel & Neuralink**: software roles
+- **Chip companies** (AMD, NVIDIA, Intel, Marvell, Tenstorrent, Lightmatter): software and AI/ML roles, plus hardware roles when the title says verification, compiler, test automation or platform
+- **Amazon, Meta & Intuit**: software engineering roles
+- **Neuralink**: software roles
 - **Space, defense, robotics & infra**: software, firmware, flight software, avionics, GNC, controls, SRE and autonomy roles at Astranis, Anduril, Varda, Zipline, Figure, Nuro, Cloudflare, SpaceX, Etched and Kodiak
 - **Embedded & firmware**: embedded, firmware, RTOS and flight software roles at any company, summer and off-season
 
