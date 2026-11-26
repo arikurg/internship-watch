@@ -3,10 +3,10 @@
 A GitHub Action that emails you when a new internship matches one of your watches:
 
 - **Tesla software**: software, firmware, ML and controls roles at Tesla (including Tesla roles Simplify misses, via the Chrome extension)
-- **Chip companies** (AMD, NVIDIA, Intel, Marvell, Tenstorrent, Lightmatter): software and AI/ML roles, plus hardware roles when the title says verification, compiler, test automation or platform
+- **Chip companies** (AMD, NVIDIA, Intel, Marvell, Tenstorrent, Lightmatter, SambaNova, Cerebras, MatX, d-Matrix, Substrate, Eliyan): software and AI/ML roles, plus hardware roles when the title says verification, compiler, test automation or platform
 - **Amazon, Meta & Intuit**: software engineering roles
 - **Neuralink**: software roles
-- **Space, defense, robotics & infra**: software, firmware, flight software, avionics, GNC, controls, SRE and autonomy roles at Astranis, Anduril, Varda, Zipline, Figure, Nuro, Cloudflare, SpaceX, Etched and Kodiak
+- **Hardware startups & infra**: software, firmware, flight software, avionics, GNC, controls, autonomy, robotics, perception, HIL and SRE roles at about 75 robotics, space, defense, aviation, energy, quantum and device startups (Bedrock Robotics, Skydio, Shield AI, Hermeus, Saronic, Castelion, Apex, Muon Space, Base Power, Commonwealth Fusion and others), plus Cloudflare. The full list is the watch's `companies` in `config.json`.
 - **Embedded & firmware**: embedded, firmware, RTOS and flight software roles at any company, summer and off-season
 
 It reads the [SimplifyJobs internship feed](https://github.com/SimplifyJobs/Summer2027-Internships), which Simplify refreshes about every 30 minutes and which covers summer and off-season terms. The workflow checks four times an hour, compares matching open roles against `state/seen.json`, and emails you anything it hasn't seen. Tesla roles Simplify never lists come in through a small Chrome extension (see [Tesla roles Simplify misses](#tesla-roles-simplify-misses)).
@@ -62,24 +62,32 @@ Preview what your filter matches without sending anything:
 python3 watch.py --dry-run --test-email
 ```
 
-## Companies read straight from Greenhouse
+## Companies read straight from their job boards
 
-Many companies post jobs on Greenhouse, whose job board feed is public and built for programs to read, so the watcher reads those boards directly. Simplify misses a lot of them. On Nov 23, 2026, none of Neuralink's 5 software intern roles were on Simplify, and Varda, Astranis, Anduril and Zipline each had several internships Simplify didn't list.
+Most startups post jobs on Greenhouse, Ashby or Lever. All three publish a public job board feed built for programs to read, so the watcher reads those boards directly. Simplify misses a lot of them. On Nov 23, 2026, none of Neuralink's 5 software intern roles were on Simplify. On Nov 25, Simplify was missing 16 of the 53 software-type internships on the startup boards, including Skydio's Winter 2027 HIL role and three Hermeus flight software and avionics roles.
 
-The boards live in `config.json` under `direct_sources.greenhouse.boards`, as company name → board name:
+The boards live in `config.json` under `direct_sources`, one section per site, as company name → board name:
 
 ```json
-"greenhouse": {
-  "enabled": true,
-  "boards": { "Neuralink": "neuralink", "Astranis": "astranis", "SpaceX": "spacex" }
-}
+"greenhouse": { "enabled": true, "boards": { "Neuralink": "neuralink", "Castelion": "castelioncorporation" } },
+"ashby":      { "enabled": true, "boards": { "Skydio": "skydio", "Shield AI": "shield" } },
+"lever":      { "enabled": true, "boards": { "Hermeus": "hermeus" } }
 ```
 
-- **Board name:** the part after `greenhouse.io/` in the company's job links (`job-boards.greenhouse.io/astranis/jobs/…` → `astranis`). You can test one in your browser: `https://boards-api.greenhouse.io/v1/boards/astranis/jobs` should show a list of jobs.
-- **Company name:** spell it the way Simplify does (for example "Varda Space", "Kodiak Robotics"), and add it to a watch's `companies` so its roles get filtered. The "Space, defense, robotics & infra" watch covers most of these boards.
-- Only internships and co-ops are read. Roles Simplify lists as open are skipped (Simplify's copy covers them); the rest are marked **Not on Simplify** or **Simplify shows it closed**, with Greenhouse's real posting date.
-- For US-only filtering, Greenhouse roles are dropped only when every location is clearly outside the US, since many boards list bare city names like "San Francisco".
-- If a board stops working (renamed, or the company left Greenhouse), you get one email naming it; the other boards keep working.
+- **Which site and board name:** open any job on the company's careers page and look at the link.
+
+  | Link looks like | Section | Board name | Check it in your browser |
+  |---|---|---|---|
+  | `job-boards.greenhouse.io/astranis/jobs/…` | `greenhouse` | `astranis` | `https://boards-api.greenhouse.io/v1/boards/astranis/jobs` |
+  | `jobs.ashbyhq.com/skydio/…` | `ashby` | `skydio` | `https://api.ashbyhq.com/posting-api/job-board/skydio` |
+  | `jobs.lever.co/hermeus/…` | `lever` | `hermeus` | `https://api.lever.co/v0/postings/hermeus` |
+
+  The check link should show a list of jobs. Companies on Workday, Pinpoint or their own careers site can't be added this way; put them in a watch's `companies` and Simplify's copy of their roles still reaches you (Boston Dynamics, Impulse Space, Stoke Space and Firefly work like this).
+- **Company name:** spell it the way Simplify does (for example "Divergent Technologies", "Neros Technologies"), and add it to a watch's `companies` so its roles get filtered. Most of these boards belong to the "Hardware startups & infra" watch; the chip startups belong to the chip watch.
+- Only internships and co-ops are read. Roles Simplify lists as open are skipped (Simplify's copy covers them); the rest are marked **Not on Simplify** or **Simplify shows it closed**, with the board's real posting date.
+- For US-only filtering, a role is dropped when the board says none of its locations are in the US, or when every location is clearly outside the US. Many boards list bare city names like "San Francisco", so the watcher doesn't require a state.
+- Generic titles with no discipline in them ("MatX Interns 2027", "Spring 2027 Engineering Intern") don't match the keywords, so check those companies' boards yourself now and then.
+- If a board stops working (renamed, or the company changed job sites), you get one email naming it; the other boards keep working.
 
 Tenstorrent posts student roles on a separate board, `tenstorrentuniversity`; its main `tenstorrent` board has no internships. Lightmatter's board mostly holds hardware internships, so the chip watch keeps only the software, platform and test automation ones.
 

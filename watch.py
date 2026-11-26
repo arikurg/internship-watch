@@ -2,9 +2,10 @@
 """Email me when a new internship that matches config.json shows up.
 
 Reads Simplify's internship feed, plus companies' own job sites listed under
-direct_sources in config.json (Greenhouse boards, and Tesla through the Chrome
-extension's Gist), so roles Simplify hasn't picked up still reach you. Runs on a schedule in GitHub Actions. Standard library
-only, so the workflow needs no pip install step.
+direct_sources in config.json (Greenhouse, Ashby and Lever job boards, and Tesla
+through the Chrome extension's Gist), so roles Simplify hasn't picked up still
+reach you. Runs on a schedule in GitHub Actions. Standard library only, so the
+workflow needs no pip install step.
 
 Usage:
   python3 watch.py                 normal run: email new matches, update state
@@ -13,6 +14,8 @@ Usage:
   python3 watch.py --feed-file F   read Simplify listings from a local file (for testing)
   python3 watch.py --tesla-file F  read Tesla's feed from a local file (for testing)
   python3 watch.py --greenhouse-file F  read Greenhouse boards from a local file (for testing)
+  python3 watch.py --ashby-file F       same for Ashby boards
+  python3 watch.py --lever-file F       same for Lever boards
 
 Email settings come from environment variables:
   SMTP_USER, SMTP_PASSWORD   login (for Gmail: your address and an app password)
@@ -37,6 +40,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
@@ -259,25 +263,29 @@ def load_tesla(simplify: list[dict], feed_file: str | None = None, feed_url: str
 
 
 # --------------------------------------------------------------------------- #
-# Direct source: companies' Greenhouse job boards
+# Direct sources: companies' job boards on Greenhouse, Ashby and Lever
 # --------------------------------------------------------------------------- #
 
-# Greenhouse's job board API is public and meant for programs, so GitHub's
-# servers can read it directly. Tests point this at a local server.
+# All three publish a public job board API meant for programs, so GitHub's
+# servers can read them directly. Tests point these at a local server.
 GREENHOUSE_API = os.environ.get("GREENHOUSE_API_BASE", "https://boards-api.greenhouse.io/v1/boards")
+ASHBY_API = os.environ.get("ASHBY_API_BASE", "https://api.ashbyhq.com/posting-api/job-board")
+LEVER_API = os.environ.get("LEVER_API_BASE", "https://api.lever.co/v0/postings")
 INTERN_TITLE = re.compile(r"\bintern(?:ship)?s?\b|\bco-?op\b", re.IGNORECASE)
 SEASON_TERM = re.compile(
     r"\b(spring|summer|fall|autumn|winter)(?:\s*/\s*(spring|summer|fall|autumn|winter))?\s*(20\d\d)\b", re.IGNORECASE)
-# Locations that are clearly outside the US. Greenhouse boards often list bare
-# US city names ("San Francisco", "In-Office"), so for them a role only counts
-# as non-US when every location matches this. Cities that share a name with a
-# US city (London, Dublin, Paris, Berlin, Melbourne, Vancouver) are left out.
+# Locations that are clearly outside the US. Job boards often list bare US city
+# names ("San Francisco", "In-Office"), so for them a role only counts as
+# non-US when every location matches this. Cities that share a name with a US
+# city (London, Dublin, Paris, Berlin, Melbourne, Vancouver) are left out.
 NON_US = re.compile(
     r"\b(?:united kingdom|england|scotland|wales|ireland|u\.?k\.?|canada|ontario|quebec|british columbia|alberta|"
     r"germany|france|netherlands|switzerland|sweden|denmark|norway|finland|poland|romania|czech|hungary|spain|"
     r"italy|israel|india|china|japan|korea|taiwan|singapore|australia|new zealand|mexico|brazil|philippines|"
     r"vietnam|united arab emirates|uae|toronto|montreal|sydney|tokyo|seoul|taipei|bangalore|bengaluru|"
     r"hyderabad|munich|tel aviv)\b", re.IGNORECASE)
+US_COUNTRIES = {"us", "usa", "united states", "united states of america"}
+UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
 
 def terms_in_title(title: str) -> list[str]:
@@ -295,47 +303,160 @@ def looks_non_us(location: str) -> bool:
     return bool(NON_US.search(location)) and not is_us_location(location)
 
 
-def fetch_greenhouse_board(token: str) -> list[dict]:
-    try:
-        req = urllib.request.Request(f"{GREENHOUSE_API}/{token}/jobs", headers=FEED_HEADERS)
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        hint = " (board not found: the company may have renamed it or left Greenhouse)" if exc.code == 404 else ""
-        raise SourceError(f"{token}: HTTP {exc.code}{hint}")
-    except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
-        raise SourceError(f"{token}: {exc}")
+def parse_time(value) -> float | None:
+    """Epoch milliseconds (Lever) or an ISO timestamp (Greenhouse, Ashby)."""
+    if isinstance(value, (int, float)):
+        return value / 1000 if value > 1e11 else float(value)
+    if isinstance(value, str) and value:
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            return None
+    return None
+
+
+def split_locations(*names) -> list[str]:
+    out = []
+    for name in names:
+        for part in re.split(r"[;|]", name or ""):
+            if part.strip() and part.strip() not in out:
+                out.append(part.strip())
+    return out
+
+
+# Each board's jobs, reduced to: id, title, locations, countries, posted, url, intern.
+def greenhouse_jobs(data) -> list[dict]:
     jobs = data.get("jobs") if isinstance(data, dict) else None
     if not isinstance(jobs, list):
-        raise SourceError(f"{token}: unexpected response")
-    return jobs
+        raise ValueError("unexpected response")
+    out = []
+    for j in jobs:
+        title = " ".join(str(j.get("title", "")).split())
+        out.append({
+            "id": str(j.get("id", "")), "title": title,
+            "locations": split_locations((j.get("location") or {}).get("name")), "countries": [],
+            "posted": parse_time(j.get("first_published")) or parse_time(j.get("updated_at")),
+            "url": j.get("absolute_url"), "intern": bool(INTERN_TITLE.search(title)),
+        })
+    return out
 
 
-def load_greenhouse(simplify: list[dict], boards: dict[str, str],
-                    boards_file: str | None = None) -> tuple[list[dict], list[str]]:
-    """Internships on the listed Greenhouse boards that Simplify doesn't list as
-    open, in Simplify's format. Returns (listings, errors for boards that failed)."""
+def ashby_jobs(data) -> list[dict]:
+    jobs = data.get("jobs") if isinstance(data, dict) else None
+    if not isinstance(jobs, list):
+        raise ValueError("unexpected response")
+    out = []
+    for j in jobs:
+        if j.get("isListed") is False:
+            continue
+        title = " ".join(str(j.get("title", "")).split())
+        places = [j] + [s for s in j.get("secondaryLocations") or [] if isinstance(s, dict)]
+        countries = [((p.get("address") or {}).get("postalAddress") or {}).get("addressCountry") or "" for p in places]
+        out.append({
+            "id": str(j.get("id", "")).lower(), "title": title,
+            "locations": split_locations(*(p.get("location") for p in places)),
+            "countries": countries if all(countries) else [],
+            "posted": parse_time(j.get("publishedAt")),
+            "url": j.get("jobUrl"),
+            "intern": bool(INTERN_TITLE.search(title)) or str(j.get("employmentType", "")).lower() == "intern",
+        })
+    return out
+
+
+def lever_jobs(data) -> list[dict]:
+    if not isinstance(data, list):
+        raise ValueError("unexpected response")
+    out = []
+    for j in data:
+        title = " ".join(str(j.get("text", "")).split())
+        cats = j.get("categories") or {}
+        out.append({
+            "id": str(j.get("id", "")).lower(), "title": title,
+            "locations": split_locations(*(cats.get("allLocations") or [cats.get("location")])),
+            "countries": [j["country"]] if j.get("country") else [],
+            "posted": parse_time(j.get("createdAt")),
+            "url": j.get("hostedUrl"),
+            "intern": bool(INTERN_TITLE.search(title)) or "intern" in str(cats.get("commitment", "")).lower(),
+        })
+    return out
+
+
+# kind -> how to read that job board site
+BOARD_KINDS = {
+    "greenhouse": {
+        "label": "Greenhouse job boards", "prefix": "gh", "api": lambda t: f"{GREENHOUSE_API}/{t}/jobs",
+        "parse": greenhouse_jobs, "job_id": r"\d{6,}",
+        "board_url": r"greenhouse\.io/(?:embed/job_app\?for=)?{token}\b",
+        "job_url": "https://job-boards.greenhouse.io/{token}/jobs/{id}",
+    },
+    "ashby": {
+        "label": "Ashby job boards", "prefix": "ashby", "api": lambda t: f"{ASHBY_API}/{t}",
+        "parse": ashby_jobs, "job_id": UUID,
+        "board_url": r"ashbyhq\.com/{token}\b", "job_url": "https://jobs.ashbyhq.com/{token}/{id}",
+    },
+    "lever": {
+        "label": "Lever job boards", "prefix": "lever", "api": lambda t: f"{LEVER_API}/{t}",
+        "parse": lever_jobs, "job_id": UUID,
+        "board_url": r"lever\.co/{token}\b", "job_url": "https://jobs.lever.co/{token}/{id}",
+    },
+}
+
+
+def fetch_board(kind: str, token: str) -> list[dict]:
+    spec = BOARD_KINDS[kind]
+    try:
+        req = urllib.request.Request(spec["api"](token), headers=FEED_HEADERS)
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return spec["parse"](json.loads(resp.read()))
+    except urllib.error.HTTPError as exc:
+        hint = (f" (board not found: the company may have renamed it or left {kind.capitalize()})"
+                if exc.code == 404 else "")
+        raise SourceError(f"{token}: HTTP {exc.code}{hint}")
+    except (urllib.error.URLError, json.JSONDecodeError, OSError, ValueError, AttributeError) as exc:
+        raise SourceError(f"{token}: {exc}")
+
+
+def load_boards(kind: str, simplify: list[dict], boards: dict[str, str],
+                boards_file: str | None = None) -> tuple[list[dict], list[str]]:
+    """Internships on one site's job boards that Simplify doesn't list as open,
+    in Simplify's format. Returns (listings, errors for boards that failed)."""
+    spec = BOARD_KINDS[kind]
+    prefix = spec["prefix"]
     tracked = {name.lower() for name in boards}
-    known: dict[str, dict] = {}  # Greenhouse job ID -> Simplify listing
+    board_url = re.compile("|".join(spec["board_url"].format(token=re.escape(t)) for t in boards.values()),
+                           re.IGNORECASE)
+    job_id = re.compile(spec["job_id"], re.IGNORECASE)
+    known: dict[str, dict] = {}  # job ID on this site -> Simplify listing
     for listing in simplify:
-        if listing.get("company_name", "").lower() in tracked:
-            ids = re.findall(r"\d{6,}", listing.get("url", ""))
-            for job_id in ids:
-                known[job_id] = listing
-            # Lets a role already emailed from Simplify match its Greenhouse copy.
-            listing.setdefault("_aliases", []).extend(f"gh:{i}" for i in ids)
+        url = listing.get("url", "")
+        if listing.get("company_name", "").lower() in tracked or board_url.search(url):
+            ids = [i.lower() for i in job_id.findall(url)]
+            for i in ids:
+                known[i] = listing
+            # Lets a role already emailed from Simplify match its job board copy.
+            listing.setdefault("_aliases", []).extend(f"{prefix}:{i}" for i in ids)
 
     saved = json.loads(Path(boards_file).read_text()) if boards_file else None
+
+    def read(token: str) -> list[dict]:
+        if saved is None:
+            return fetch_board(kind, token)
+        if token not in saved:
+            raise SourceError(f"{token}: not in the test file")
+        try:
+            return spec["parse"](saved[token])
+        except (ValueError, AttributeError) as exc:
+            raise SourceError(f"{token}: {exc}")
+
+    # Read the boards a few at a time so a long list doesn't slow the run.
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {company: pool.submit(read, token) for company, token in boards.items()}
+
     out: list[dict] = []
     errors: list[str] = []
     for company, token in boards.items():
         try:
-            if saved is not None:
-                if token not in saved:
-                    raise SourceError(f"{token}: not in the test file")
-                jobs = saved[token]
-            else:
-                jobs = fetch_greenhouse_board(token)
+            jobs = futures[company].result()
         except SourceError as exc:
             errors.append(str(exc))
             continue
@@ -343,43 +464,36 @@ def load_greenhouse(simplify: list[dict], boards: dict[str, str],
         # Companies often post one listing per location; merge identical titles.
         groups: dict[str, list[dict]] = {}
         for job in jobs:
-            title = " ".join(str(job.get("title", "")).split())
-            if job.get("id") and INTERN_TITLE.search(title):
-                groups.setdefault(title, []).append(job)
+            if job["id"] and job["intern"]:
+                groups.setdefault(job["title"], []).append(job)
 
         for title, group in groups.items():
-            ids = [str(j["id"]) for j in group]
+            ids = [j["id"] for j in group]
             on_simplify = [known[i] for i in ids if i in known]
             if any(l.get("active") for l in on_simplify):
                 continue  # Simplify lists it as open, so its listing covers this role
-            first = min(group, key=lambda j: j.get("first_published") or j.get("updated_at") or "")
-            stamp = first.get("first_published") or first.get("updated_at")
-            try:
-                posted = datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp() if stamp else time.time()
-            except ValueError:
-                posted = time.time()
-            locations = []
-            for j in group:
-                for part in re.split(r"[;|]", (j.get("location") or {}).get("name") or ""):
-                    if part.strip() and part.strip() not in locations:
-                        locations.append(part.strip())
+            first = min(group, key=lambda j: j["posted"] or float("inf"))
+            locations = split_locations(*(loc for j in group for loc in j["locations"]))
+            countries = [c for j in group for c in j["countries"]]
             out.append({
-                "id": f"gh:{ids[0]}",
+                "id": f"{prefix}:{ids[0]}",
                 "company_name": company,
                 "title": title,
-                "url": first.get("absolute_url") or f"https://job-boards.greenhouse.io/{token}/jobs/{ids[0]}",
+                "url": first["url"] or spec["job_url"].format(token=token, id=ids[0]),
                 "locations": locations,
                 "terms": terms_in_title(title),
                 "category": "",
                 "degrees": [],
                 "active": True,
                 "is_visible": True,
-                "date_posted": posted,
-                "_date_known": True,
+                "date_posted": first["posted"] or time.time(),
+                "_date_known": bool(first["posted"]),
                 "_lenient_location": True,
-                "_source": "greenhouse",
+                # Ashby and Lever give countries; trust them when every location has one.
+                "_non_us": bool(countries) and not any(c.strip().lower() in US_COUNTRIES for c in countries),
+                "_source": kind,
                 "_simplify": "closed" if on_simplify else "missing",
-                "_aliases": [f"gh:{i}" for i in ids] + [l["id"] for l in on_simplify],
+                "_aliases": [f"{prefix}:{i}" for i in ids] + [l["id"] for l in on_simplify],
             })
     return out, errors
 
@@ -437,18 +551,18 @@ def run_direct_sources(args, config, simplify, sources_state, now) -> tuple[list
         if notice:
             notices.append(notice)
 
-    cfg = direct.get("greenhouse", {})
-    if not cfg.get("enabled") or not cfg.get("boards"):
-        sources_state.pop("greenhouse", None)
-    else:
-        found, errors = load_greenhouse(simplify, cfg["boards"], args.greenhouse_file)
-        print(f"greenhouse: {len(found)} internships that Simplify doesn't list as open"
+    for kind, spec in BOARD_KINDS.items():
+        cfg = direct.get(kind, {})
+        if not cfg.get("enabled") or not cfg.get("boards"):
+            sources_state.pop(kind, None)
+            continue
+        found, errors = load_boards(kind, simplify, cfg["boards"], getattr(args, f"{kind}_file", None))
+        print(f"{kind}: {len(found)} internships that Simplify doesn't list as open"
               + (f" ({len(errors)} board(s) failed)" if errors else ""))
         for error in errors:
-            print(f"greenhouse board failed: {error}", file=sys.stderr)
+            print(f"{kind} board failed: {error}", file=sys.stderr)
         extra += found
-        notice = source_health("greenhouse", "Greenhouse job boards", sources_state, now,
-                               "; ".join(errors) if errors else None)
+        notice = source_health(kind, spec["label"], sources_state, now, "; ".join(errors) if errors else None)
         if notice:
             notices.append(notice)
     return extra, notices
@@ -528,12 +642,13 @@ class Watch:
         if self.companies is not None and listing.get("company_name", "").lower() not in self.companies:
             return False
         # A role passes if any of its locations is in the US (or it lists none).
-        # Greenhouse boards often use bare city names, so there a role is only
-        # dropped when every location is clearly outside the US.
+        # Job boards often use bare city names, so there a role is only dropped
+        # when the board says every location's country isn't the US, or every
+        # location is clearly outside the US.
         locations = listing.get("locations") or []
         if self.us_only and locations:
             if listing.get("_lenient_location"):
-                if all(looks_non_us(l) for l in locations):
+                if listing.get("_non_us") or all(looks_non_us(l) for l in locations):
                     return False
             elif not any(is_us_location(l) for l in locations):
                 return False
@@ -717,7 +832,8 @@ def build_email(postings: list[dict], config: dict, heading: str) -> tuple[str, 
           <div style="color:#333;margin-top:4px"><b>{escape(r['company'])}</b> &middot; {escape(r['locations'])} &middot; {escape(r['terms'])}</div>
           <div style="color:#777;font-size:13px;margin-top:2px">{escape(r['posted'])} &middot; {escape(r['category'])}</div>
         </td></tr>""")
-    source_names = {"tesla": "Tesla careers site", "greenhouse": "company Greenhouse boards"}
+    source_names = {"tesla": "Tesla careers site", "greenhouse": "company Greenhouse boards",
+                    "ashby": "company Ashby boards", "lever": "company Lever boards"}
     extra_sources = sorted({source_names[p["_source"]] for p in postings if p.get("_source") in source_names})
     footer = "Sources: " + ", ".join(["SimplifyJobs internship feed"] + extra_sources)
     text_lines.append(footer)
@@ -794,6 +910,8 @@ def main() -> int:
     parser.add_argument("--feed-file")
     parser.add_argument("--tesla-file")
     parser.add_argument("--greenhouse-file", help="read Greenhouse boards from a local file (for testing)")
+    parser.add_argument("--ashby-file", help="read Ashby boards from a local file (for testing)")
+    parser.add_argument("--lever-file", help="read Lever boards from a local file (for testing)")
     args = parser.parse_args()
     if os.environ.get("TEST_EMAIL") in {"1", "true"}:
         args.test_email = True

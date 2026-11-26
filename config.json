@@ -1,28 +1,5 @@
 {
   "feed_url": "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json",
-  "direct_sources": {
-    "tesla": {
-      "enabled": false
-    },
-    "greenhouse": {
-      "enabled": true,
-      "boards": {
-        "Neuralink": "neuralink",
-        "Astranis": "astranis",
-        "Anduril": "andurilindustries",
-        "Varda Space": "vardaspace",
-        "Zipline": "flyzipline",
-        "Figure": "figureai",
-        "Nuro": "nuro",
-        "Cloudflare": "cloudflare",
-        "SpaceX": "spacex",
-        "Etched": "etchedai",
-        "Kodiak Robotics": "kodiak",
-        "Tenstorrent": "tenstorrentuniversity",
-        "Lightmatter": "lightmatter"
-      }
-    }
-  },
   "watches": [
     {
       "name": "Tesla software",
@@ -75,7 +52,13 @@
         "Intel",
         "Marvell",
         "Tenstorrent",
-        "Lightmatter"
+        "Lightmatter",
+        "SambaNova Systems",
+        "MatX",
+        "Cerebras",
+        "d-Matrix",
+        "Substrate",
+        "Eliyan"
       ],
       "categories": [
         "Software",
@@ -87,7 +70,9 @@
         "software",
         "compiler",
         "test automation",
-        "platform"
+        "platform",
+        "machine learning",
+        "ml infrastructure"
       ]
     },
     {
@@ -136,7 +121,7 @@
       ]
     },
     {
-      "name": "Space, defense, robotics & infra",
+      "name": "Hardware startups & infra",
       "companies": [
         "Astranis",
         "Anduril",
@@ -147,7 +132,77 @@
         "Cloudflare",
         "SpaceX",
         "Etched",
-        "Kodiak Robotics"
+        "Kodiak Robotics",
+        "Apptronik",
+        "Formic",
+        "Agility Robotics",
+        "Path Robotics",
+        "Diligent Robotics",
+        "Divergent Technologies",
+        "Matic",
+        "Castelion",
+        "Mach Industries",
+        "CHAOS Industries",
+        "Epirus",
+        "Shift5",
+        "Neros Technologies",
+        "K2 Space",
+        "True Anomaly",
+        "Relativity Space",
+        "Muon Space",
+        "Vast",
+        "Albedo",
+        "Inversion Space",
+        "Electra",
+        "Glydways",
+        "StackAV",
+        "Bot Auto",
+        "Redwood Materials",
+        "Antora Energy",
+        "Fervo Energy",
+        "Valar Atomics",
+        "Pacific Fusion",
+        "PsiQuantum",
+        "Verkada",
+        "Oura",
+        "Formlabs",
+        "Bedrock Robotics",
+        "1X",
+        "Physical Intelligence",
+        "The Bot Company",
+        "Machina Labs",
+        "Skydio",
+        "Saronic",
+        "Collaborative Robotics",
+        "Standard Bots",
+        "Mytra",
+        "Gecko Robotics",
+        "Hadrian",
+        "Shield AI",
+        "Apex",
+        "Northwood Space",
+        "Applied Intuition",
+        "Helion Energy",
+        "Form Energy",
+        "Base Power",
+        "Extropic",
+        "Whoop",
+        "Meter",
+        "Eight Sleep",
+        "Dexterity",
+        "Field AI",
+        "Bright Machines",
+        "CX2",
+        "Hermeus",
+        "Merlin Labs",
+        "Waabi",
+        "Commonwealth Fusion Systems",
+        "Exowatt",
+        "Atom Computing",
+        "Boston Dynamics",
+        "Impulse Space",
+        "Stoke Space",
+        "Firefly Aerospace"
       ],
       "categories": [
         "Software",
@@ -172,7 +227,16 @@
         "machine learning",
         "compiler",
         "test automation",
-        "systems validation"
+        "systems validation",
+        "robotics",
+        "perception",
+        "computer vision",
+        "deep learning",
+        "hil",
+        "hardware in loop",
+        "hardware-in-the-loop",
+        "ground software",
+        "verification"
       ],
       "title_exclude": [
         "phd",
@@ -219,5 +283,110 @@
     "Winter 2026"
   ],
   "timezone": "America/New_York",
-  "notify_on_first_run": true
+  "notify_on_first_run": true,
+  "direct_sources": {
+    "tesla": {
+      "enabled": false
+    },
+    "greenhouse": {
+      "enabled": true,
+      "boards": {
+        "Neuralink": "neuralink",
+        "Astranis": "astranis",
+        "Anduril": "andurilindustries",
+        "Varda Space": "vardaspace",
+        "Zipline": "flyzipline",
+        "Figure": "figureai",
+        "Nuro": "nuro",
+        "Cloudflare": "cloudflare",
+        "SpaceX": "spacex",
+        "Etched": "etchedai",
+        "Kodiak Robotics": "kodiak",
+        "Tenstorrent": "tenstorrentuniversity",
+        "Lightmatter": "lightmatter",
+        "Apptronik": "apptronik",
+        "Formic": "formic",
+        "Agility Robotics": "agilityrobotics",
+        "Path Robotics": "pathrobotics",
+        "Diligent Robotics": "diligentrobotics",
+        "Divergent Technologies": "divergent",
+        "Matic": "matic",
+        "Castelion": "castelioncorporation",
+        "Mach Industries": "machindustries",
+        "CHAOS Industries": "chaosindustries",
+        "Epirus": "epirus",
+        "Shift5": "shift5",
+        "Neros Technologies": "nerostechnologies",
+        "K2 Space": "k2spacecorporation",
+        "True Anomaly": "trueanomalyinc",
+        "Relativity Space": "relativity",
+        "Muon Space": "muonspace",
+        "Vast": "vast",
+        "Albedo": "albedo",
+        "Inversion Space": "inversionspace",
+        "Electra": "electraaero",
+        "Glydways": "glydways",
+        "StackAV": "stackav",
+        "Bot Auto": "botauto",
+        "Redwood Materials": "redwoodmaterials",
+        "Antora Energy": "antora",
+        "Fervo Energy": "fervoenergy",
+        "Valar Atomics": "valaratomics",
+        "Pacific Fusion": "pacificfusion",
+        "SambaNova Systems": "sambanovasystems",
+        "PsiQuantum": "psiquantum",
+        "Verkada": "verkada",
+        "Oura": "oura",
+        "Formlabs": "formlabs"
+      }
+    },
+    "ashby": {
+      "enabled": true,
+      "boards": {
+        "Bedrock Robotics": "bedrock-robotics",
+        "1X": "1x",
+        "Physical Intelligence": "physicalintelligence",
+        "The Bot Company": "thebotcompany",
+        "Machina Labs": "machina-labs",
+        "Skydio": "skydio",
+        "Saronic": "saronic",
+        "Collaborative Robotics": "cobot",
+        "Standard Bots": "standardbots",
+        "Mytra": "mytra",
+        "Gecko Robotics": "gecko-robotics",
+        "Hadrian": "hadrian-automation",
+        "Shield AI": "shield",
+        "Apex": "apex-technology-inc",
+        "Northwood Space": "northwoodspace",
+        "Applied Intuition": "applied",
+        "Helion Energy": "helion",
+        "Form Energy": "formenergy",
+        "Base Power": "base-power",
+        "MatX": "matx",
+        "Cerebras": "cerebras",
+        "d-Matrix": "d-matrix",
+        "Substrate": "substrate",
+        "Extropic": "extropic",
+        "Whoop": "whoop",
+        "Meter": "meter",
+        "Eight Sleep": "eightsleep"
+      }
+    },
+    "lever": {
+      "enabled": true,
+      "boards": {
+        "Dexterity": "dexterity",
+        "Field AI": "field-ai",
+        "Bright Machines": "brightmachines",
+        "CX2": "cx2",
+        "Hermeus": "hermeus",
+        "Merlin Labs": "merlinlabs",
+        "Waabi": "waabi",
+        "Commonwealth Fusion Systems": "cfsenergy",
+        "Exowatt": "exowatt",
+        "Eliyan": "eliyan",
+        "Atom Computing": "atomcomputing"
+      }
+    }
+  }
 }
